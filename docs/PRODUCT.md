@@ -85,7 +85,7 @@ The MVP should include only the features required to validate the initial commun
 - member list;
 - community invites;
 - basic moderation surfaces;
-- responsive desktop-first web application.
+- responsive web application optimized for desktop while remaining fully usable on mobile browsers.
 
 ### MVP UX Priorities
 
