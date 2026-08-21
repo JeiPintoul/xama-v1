@@ -1,13 +1,21 @@
-import type { Channel, Community } from '@xama/domain';
-import { Link } from 'react-router';
+import type { Channel, Community, NavigationMode, ResolvedNavigationMode } from '@xama/domain';
+import { useId } from 'react';
 
+import { AdaptiveChannelNavigation } from '@/features/navigation/AdaptiveChannelNavigation';
 import { CurrentUserArea } from '@/features/navigation/CurrentUserArea';
-import { getChannelPath } from '@/features/navigation/navigation';
+import type { ModularNavigationSection } from '@/features/navigation/navigation';
 import { cn } from '@/lib/utils';
 
 type CommunityNavigationProps = Readonly<{
   community: Community;
   selectedChannel: Channel;
+  requestedMode: NavigationMode;
+  resolvedMode: ResolvedNavigationMode;
+  activeModularSection: ModularNavigationSection;
+  favoriteChannelIds: readonly string[];
+  onRequestedModeChange: (mode: NavigationMode) => void;
+  onActiveModularSectionChange: (section: ModularNavigationSection) => void;
+  onToggleFavorite: (channelId: string) => void;
   onNavigate?: () => void;
   className?: string;
 }>;
@@ -15,9 +23,24 @@ type CommunityNavigationProps = Readonly<{
 export function CommunityNavigation({
   community,
   selectedChannel,
+  requestedMode,
+  resolvedMode,
+  activeModularSection,
+  favoriteChannelIds,
+  onRequestedModeChange,
+  onActiveModularSectionChange,
+  onToggleFavorite,
   onNavigate,
   className,
 }: CommunityNavigationProps) {
+  const modeControlId = `navigation-mode-${useId().replaceAll(':', '')}`;
+
+  function changeRequestedMode(value: string) {
+    if (value === 'automatic' || value === 'simplified' || value === 'modular') {
+      onRequestedModeChange(value);
+    }
+  }
+
   return (
     <aside
       className={cn(
@@ -30,42 +53,45 @@ export function CommunityNavigation({
         <p className="mt-1 truncate text-xs text-text-muted">{community.description}</p>
       </header>
 
-      <nav
-        aria-label={`Canais de ${community.name}`}
-        className="min-h-0 flex-1 overflow-y-auto px-2 py-4"
-      >
-        <p className="px-2 text-[0.6875rem] font-semibold tracking-[0.14em] text-text-muted uppercase">
-          Canais
-        </p>
-        <ul className="mt-2 space-y-1">
-          {community.channels.map((channel) => {
-            const isSelected = channel.id === selectedChannel.id;
+      {import.meta.env.DEV ? (
+        <section className="border-b border-border px-3 py-3" aria-label="Ferramentas de navegação">
+          <div className="flex items-center justify-between gap-2">
+            <label
+              htmlFor={modeControlId}
+              className="text-[0.6875rem] font-semibold tracking-[0.12em] text-text-muted uppercase"
+            >
+              Modo
+            </label>
+            <span className="rounded-sm bg-surface-raised px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-text-muted uppercase">
+              Dev
+            </span>
+          </div>
+          <select
+            id={modeControlId}
+            value={requestedMode}
+            onChange={(event) => changeRequestedMode(event.currentTarget.value)}
+            className="mt-2 min-h-11 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="automatic">Automático</option>
+            <option value="simplified">Simplificado</option>
+            <option value="modular">Modular</option>
+          </select>
+          <p className="mt-2 text-xs text-text-muted" aria-live="polite">
+            Exibindo {resolvedMode === 'simplified' ? 'Simplificado' : 'Modular'}
+          </p>
+        </section>
+      ) : null}
 
-            return (
-              <li key={channel.id}>
-                <Link
-                  to={getChannelPath(community, channel)}
-                  onClick={onNavigate}
-                  aria-current={isSelected ? 'page' : undefined}
-                  className={cn(
-                    'flex min-h-11 min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text-secondary outline-none transition-colors',
-                    'hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                    isSelected && 'bg-surface-raised text-foreground',
-                  )}
-                >
-                  <span
-                    className={cn('text-base text-text-muted', isSelected && 'text-primary')}
-                    aria-hidden="true"
-                  >
-                    #
-                  </span>
-                  <span className="truncate">{channel.name}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <AdaptiveChannelNavigation
+        community={community}
+        selectedChannel={selectedChannel}
+        resolvedMode={resolvedMode}
+        activeModularSection={activeModularSection}
+        favoriteChannelIds={favoriteChannelIds}
+        onActiveModularSectionChange={onActiveModularSectionChange}
+        onNavigate={onNavigate}
+        onToggleFavorite={onToggleFavorite}
+      />
 
       <CurrentUserArea />
     </aside>

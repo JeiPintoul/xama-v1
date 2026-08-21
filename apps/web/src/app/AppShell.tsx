@@ -1,10 +1,13 @@
-import type { Channel, Community } from '@xama/domain';
-import { useEffect, useRef, useState } from 'react';
+import { resolveNavigationMode } from '@xama/domain';
+import type { Channel, Community, NavigationMode } from '@xama/domain';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
 import { CommunityNavigation } from '@/features/navigation/CommunityNavigation';
 import { CommunityRail } from '@/features/navigation/CommunityRail';
 import { MobileNavigation } from '@/features/navigation/MobileNavigation';
+import { mockCurrentUser } from '@/features/navigation/mock-navigation';
+import type { ModularNavigationSection } from '@/features/navigation/navigation';
 import { PrimaryContent } from '@/features/navigation/PrimaryContent';
 import { SidebarResizeHandle } from '@/features/navigation/SidebarResizeHandle';
 
@@ -17,14 +20,68 @@ const DEFAULT_SIDEBAR_WIDTH = 272;
 const MINIMUM_SIDEBAR_WIDTH = 224;
 const MAXIMUM_SIDEBAR_WIDTH = 360;
 
+type FavoriteChannelIdsByCommunity = Readonly<Record<string, readonly string[]>>;
+type ModularSectionSelection = Readonly<{
+  contextKey: string;
+  section: ModularNavigationSection;
+}>;
+
 export function AppShell({ community, channel }: AppShellProps) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [isMobileNavigationOpen, setIsMobileNavigationOpen] = useState(false);
+  const [requestedNavigationMode, setRequestedNavigationMode] =
+    useState<NavigationMode>('automatic');
+  const [modularSectionSelection, setModularSectionSelection] = useState<ModularSectionSelection>({
+    contextKey: '',
+    section: 'text',
+  });
+  const [favoriteChannelIdsByCommunity, setFavoriteChannelIdsByCommunity] =
+    useState<FavoriteChannelIdsByCommunity>(mockCurrentUser.favoriteChannelIdsByCommunity);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const shouldRestoreMobileMenuFocus = useRef(false);
+  const resolvedNavigationMode = resolveNavigationMode(requestedNavigationMode, community);
+  const favoriteChannelIds = favoriteChannelIdsByCommunity[community.id] ?? [];
+  const modularSectionContextKey = `${resolvedNavigationMode}:${community.id}:${channel.id}`;
+  const activeModularSection =
+    modularSectionSelection.contextKey === modularSectionContextKey
+      ? modularSectionSelection.section
+      : channel.type;
   const layoutStyle = {
     '--community-navigation-width': `${sidebarWidth}px`,
   } as CSSProperties;
+
+  const openMobileNavigation = useCallback(() => {
+    shouldRestoreMobileMenuFocus.current = true;
+    setIsMobileNavigationOpen(true);
+  }, []);
+
+  const closeMobileNavigation = useCallback(() => {
+    setIsMobileNavigationOpen(false);
+  }, []);
+
+  const toggleFavorite = useCallback(
+    (channelId: string) => {
+      setFavoriteChannelIdsByCommunity((currentFavorites) => {
+        const communityFavorites = currentFavorites[community.id] ?? [];
+        const nextCommunityFavorites = communityFavorites.includes(channelId)
+          ? communityFavorites.filter((favoriteChannelId) => favoriteChannelId !== channelId)
+          : [...communityFavorites, channelId];
+
+        return {
+          ...currentFavorites,
+          [community.id]: nextCommunityFavorites,
+        };
+      });
+    },
+    [community.id],
+  );
+
+  const changeActiveModularSection = useCallback(
+    (section: ModularNavigationSection) => {
+      setModularSectionSelection({ contextKey: modularSectionContextKey, section });
+    },
+    [modularSectionContextKey],
+  );
 
   useEffect(() => {
     if (!isMobileNavigationOpen && shouldRestoreMobileMenuFocus.current) {
@@ -51,15 +108,6 @@ export function AppShell({ community, channel }: AppShellProps) {
     return () => desktopLayout.removeEventListener('change', closeAtDesktopWidth);
   }, [isMobileNavigationOpen]);
 
-  function openMobileNavigation() {
-    shouldRestoreMobileMenuFocus.current = true;
-    setIsMobileNavigationOpen(true);
-  }
-
-  function closeMobileNavigation() {
-    setIsMobileNavigationOpen(false);
-  }
-
   return (
     <div className="relative min-h-svh bg-background text-foreground lg:h-svh lg:overflow-hidden">
       <div
@@ -76,7 +124,17 @@ export function AppShell({ community, channel }: AppShellProps) {
           className="relative hidden min-h-0 min-w-0 lg:block"
           data-testid="desktop-community-navigation"
         >
-          <CommunityNavigation community={community} selectedChannel={channel} />
+          <CommunityNavigation
+            community={community}
+            selectedChannel={channel}
+            requestedMode={requestedNavigationMode}
+            resolvedMode={resolvedNavigationMode}
+            activeModularSection={activeModularSection}
+            favoriteChannelIds={favoriteChannelIds}
+            onRequestedModeChange={setRequestedNavigationMode}
+            onActiveModularSectionChange={changeActiveModularSection}
+            onToggleFavorite={toggleFavorite}
+          />
           <SidebarResizeHandle
             width={sidebarWidth}
             minimumWidth={MINIMUM_SIDEBAR_WIDTH}
@@ -98,6 +156,13 @@ export function AppShell({ community, channel }: AppShellProps) {
         <MobileNavigation
           community={community}
           selectedChannel={channel}
+          requestedMode={requestedNavigationMode}
+          resolvedMode={resolvedNavigationMode}
+          activeModularSection={activeModularSection}
+          favoriteChannelIds={favoriteChannelIds}
+          onRequestedModeChange={setRequestedNavigationMode}
+          onActiveModularSectionChange={changeActiveModularSection}
+          onToggleFavorite={toggleFavorite}
           onClose={closeMobileNavigation}
         />
       ) : null}

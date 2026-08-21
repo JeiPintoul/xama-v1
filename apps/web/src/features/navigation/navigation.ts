@@ -7,8 +7,11 @@ export type NavigationSelection = Readonly<{
   channel: Channel;
 }>;
 
+export type ModularNavigationSection = Channel['type'] | 'activity';
+
 export function getDefaultChannel(community: Community): Channel {
-  const [channel] = community.channels;
+  const channel =
+    community.channels.find((candidate) => candidate.type === 'text') ?? community.channels[0];
 
   if (!channel) {
     throw new Error(`Community "${community.id}" must contain at least one channel.`);
