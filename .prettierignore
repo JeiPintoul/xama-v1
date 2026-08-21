@@ -1,0 +1,8 @@
+coverage
+dist
+node_modules
+pnpm-lock.yaml
+assets
+reference
+AGENTS.md
+docs

@@ -1,0 +1,80 @@
+:root {
+  color-scheme: dark;
+
+  --xama-color-background: oklch(0.145 0.012 270);
+  --xama-color-surface: oklch(0.185 0.015 270);
+  --xama-color-surface-raised: oklch(0.235 0.018 270);
+  --xama-color-text-primary: oklch(0.97 0.005 260);
+  --xama-color-text-secondary: oklch(0.78 0.012 260);
+  --xama-color-text-muted: oklch(0.62 0.014 260);
+  --xama-color-accent: oklch(0.72 0.16 260);
+  --xama-color-accent-foreground: oklch(0.16 0.02 270);
+  --xama-color-border: oklch(0.32 0.018 270);
+  --xama-color-success: oklch(0.75 0.16 150);
+  --xama-color-warning: oklch(0.82 0.16 80);
+  --xama-color-danger: oklch(0.66 0.21 25);
+
+  --xama-radius-small: 0.5rem;
+  --xama-radius-medium: 0.75rem;
+  --xama-radius-large: 1.25rem;
+
+  --xama-spacing-small: 0.5rem;
+  --xama-spacing-medium: 1rem;
+  --xama-spacing-large: 1.5rem;
+
+  --xama-font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --background: var(--xama-color-background);
+  --foreground: var(--xama-color-text-primary);
+  --card: var(--xama-color-surface);
+  --card-foreground: var(--xama-color-text-primary);
+  --popover: var(--xama-color-surface-raised);
+  --popover-foreground: var(--xama-color-text-primary);
+  --primary: var(--xama-color-accent);
+  --primary-foreground: var(--xama-color-accent-foreground);
+  --secondary: var(--xama-color-surface-raised);
+  --secondary-foreground: var(--xama-color-text-primary);
+  --muted: var(--xama-color-surface-raised);
+  --muted-foreground: var(--xama-color-text-muted);
+  --accent: var(--xama-color-surface-raised);
+  --accent-foreground: var(--xama-color-text-primary);
+  --destructive: var(--xama-color-danger);
+  --border: var(--xama-color-border);
+  --input: var(--xama-color-border);
+  --ring: var(--xama-color-accent);
+  --radius: var(--xama-radius-medium);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-surface: var(--xama-color-surface);
+  --color-surface-raised: var(--xama-color-surface-raised);
+  --color-text-primary: var(--xama-color-text-primary);
+  --color-text-secondary: var(--xama-color-text-secondary);
+  --color-text-muted: var(--xama-color-text-muted);
+  --color-success: var(--xama-color-success);
+  --color-warning: var(--xama-color-warning);
+  --color-danger: var(--xama-color-danger);
+  --font-sans: var(--xama-font-sans);
+  --radius-sm: var(--xama-radius-small);
+  --radius-md: var(--xama-radius-medium);
+  --radius-lg: var(--xama-radius-large);
+}
