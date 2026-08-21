@@ -41,6 +41,9 @@ importers:
       '@xama/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
+      '@xama/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
