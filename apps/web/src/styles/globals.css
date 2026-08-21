@@ -33,23 +33,70 @@
 }
 
 @layer components {
+  .channel-context-glyph,
+  .channel-favorite-marker {
+    transition: opacity 120ms ease;
+  }
+
+  .channel-favorite-marker {
+    top: 0.25rem;
+    right: 0.25rem;
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    .channel-favorite-action {
+    .channel-context-trigger {
       pointer-events: none;
+    }
+
+    .channel-context-trigger:not(.is-favorite) {
       opacity: 0;
     }
 
-    .group:hover > .channel-favorite-action,
-    .group:focus-within > .channel-favorite-action {
+    .channel-context-trigger.is-favorite .channel-context-glyph {
+      opacity: 0;
+    }
+
+    .channel-context-trigger.is-favorite .channel-favorite-marker {
+      top: 50%;
+      right: 50%;
+      translate: 50% -50%;
+    }
+
+    .group:hover > .channel-context-trigger,
+    .group:focus-within > .channel-context-trigger {
       pointer-events: auto;
+      opacity: 1;
+    }
+
+    .group:hover > .channel-context-trigger .channel-context-glyph,
+    .group:focus-within > .channel-context-trigger .channel-context-glyph {
+      opacity: 1;
+    }
+
+    .group:hover > .channel-context-trigger .channel-favorite-marker,
+    .group:focus-within > .channel-context-trigger .channel-favorite-marker {
+      top: 0.25rem;
+      right: 0.25rem;
+      translate: none;
       opacity: 1;
     }
   }
 
   @media (any-pointer: coarse) {
-    .channel-favorite-action {
+    .channel-context-trigger {
       pointer-events: auto;
       opacity: 1;
+    }
+
+    .channel-context-trigger .channel-context-glyph,
+    .channel-context-trigger .channel-favorite-marker {
+      opacity: 1;
+    }
+
+    .channel-context-trigger .channel-favorite-marker {
+      top: 0.25rem;
+      right: 0.25rem;
+      translate: none;
     }
   }
 }

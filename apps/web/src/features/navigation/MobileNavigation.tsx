@@ -15,7 +15,7 @@ type MobileNavigationProps = Readonly<{
   favoriteChannelIds: readonly string[];
   onRequestedModeChange: (mode: NavigationMode) => void;
   onActiveModularSectionChange: (section: ModularNavigationSection) => void;
-  onToggleFavorite: (channelId: string) => void;
+  onToggleFavorite: (communityId: string, channelId: string) => void;
   onClose: () => void;
 }>;
 

@@ -45,8 +45,8 @@ export function PrimaryContent({
         </div>
       </header>
 
-      <section className="flex min-h-0 flex-1 items-center overflow-y-auto px-6 py-12 sm:px-10 lg:px-14">
-        <div className="w-full max-w-2xl">
+      <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12 sm:px-10 lg:px-14">
+        <div className="w-full max-w-2xl -translate-y-6 text-left sm:-translate-y-8 lg:-translate-y-10">
           <div className="grid size-12 place-items-center rounded-md bg-surface-raised text-2xl text-text-secondary">
             <ChannelTypeIcon type={channel.type} className="text-text-secondary" />
           </div>

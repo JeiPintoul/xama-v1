@@ -7,7 +7,7 @@ export type NavigationSelection = Readonly<{
   channel: Channel;
 }>;
 
-export type ModularNavigationSection = Channel['type'] | 'activity';
+export type ModularNavigationSection = Channel['type'] | 'favorites' | 'activity';
 
 export function getDefaultChannel(community: Community): Channel {
   const channel =

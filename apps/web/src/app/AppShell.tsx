@@ -41,7 +41,7 @@ export function AppShell({ community, channel }: AppShellProps) {
   const shouldRestoreMobileMenuFocus = useRef(false);
   const resolvedNavigationMode = resolveNavigationMode(requestedNavigationMode, community);
   const favoriteChannelIds = favoriteChannelIdsByCommunity[community.id] ?? [];
-  const modularSectionContextKey = `${resolvedNavigationMode}:${community.id}:${channel.id}`;
+  const modularSectionContextKey = community.id;
   const activeModularSection =
     modularSectionSelection.contextKey === modularSectionContextKey
       ? modularSectionSelection.section
@@ -59,22 +59,19 @@ export function AppShell({ community, channel }: AppShellProps) {
     setIsMobileNavigationOpen(false);
   }, []);
 
-  const toggleFavorite = useCallback(
-    (channelId: string) => {
-      setFavoriteChannelIdsByCommunity((currentFavorites) => {
-        const communityFavorites = currentFavorites[community.id] ?? [];
-        const nextCommunityFavorites = communityFavorites.includes(channelId)
-          ? communityFavorites.filter((favoriteChannelId) => favoriteChannelId !== channelId)
-          : [...communityFavorites, channelId];
+  const toggleFavorite = useCallback((communityId: string, channelId: string) => {
+    setFavoriteChannelIdsByCommunity((currentFavorites) => {
+      const communityFavorites = currentFavorites[communityId] ?? [];
+      const nextCommunityFavorites = communityFavorites.includes(channelId)
+        ? communityFavorites.filter((favoriteChannelId) => favoriteChannelId !== channelId)
+        : [...communityFavorites, channelId];
 
-        return {
-          ...currentFavorites,
-          [community.id]: nextCommunityFavorites,
-        };
-      });
-    },
-    [community.id],
-  );
+      return {
+        ...currentFavorites,
+        [communityId]: nextCommunityFavorites,
+      };
+    });
+  }, []);
 
   const changeActiveModularSection = useCallback(
     (section: ModularNavigationSection) => {
