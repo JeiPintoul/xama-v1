@@ -230,7 +230,7 @@ export function NavigationModeMenu({
           ref={menuRef}
           id={`${idPrefix}-menu`}
           role="menu"
-          aria-label={`Opções de ${communityName}`}
+          aria-label="Modos de navegação"
           className="fixed z-[70] overflow-y-auto rounded-md border border-border bg-popover p-1.5 shadow-lg shadow-background/30"
           style={{ left: 0, top: 0, visibility: 'hidden' }}
         >
