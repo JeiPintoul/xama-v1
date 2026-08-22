@@ -39,7 +39,7 @@ export function ChannelList({
   onCloseChannelActions,
 }: ChannelListProps) {
   return (
-    <ul className="space-y-1">
+    <ul className="space-y-0.5">
       {channels.map((channel) => {
         const isFavorite = favoriteChannelIds.includes(channel.id);
         const isSelected = channel.id === selectedChannelId;
@@ -100,19 +100,19 @@ export function ChannelList({
                   const bounds = event.currentTarget.getBoundingClientRect();
                   openChannelActions(event.currentTarget, {
                     x: bounds.right,
-                    y: bounds.top + 8,
+                    y: bounds.top + 6,
                     align: 'end',
                   });
                 }}
                 className={cn(
-                  'flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-md py-2 pr-1 pl-3 text-sm font-medium text-text-secondary outline-none',
+                  'channel-row-link flex min-h-9 min-w-0 flex-1 items-center gap-2.5 rounded-md py-1.5 pr-1 pl-2.5 text-[0.8125rem] font-medium text-text-secondary outline-none',
                   'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                   isSelected && 'text-foreground',
                 )}
               >
                 <ChannelTypeIcon
                   type={channel.type}
-                  className={cn('shrink-0 text-text-muted', isSelected && 'text-primary')}
+                  className={cn('size-3.5 shrink-0 text-text-muted', isSelected && 'text-primary')}
                 />
                 <span className="truncate">{channel.name}</span>
               </Link>
@@ -137,14 +137,14 @@ export function ChannelList({
                   });
                 }}
                 className={cn(
-                  'channel-context-trigger relative grid size-11 shrink-0 place-items-center rounded-md text-text-muted outline-none transition-[color,opacity,background-color]',
+                  'channel-context-trigger relative grid size-9 shrink-0 place-items-center rounded-md text-text-muted outline-none transition-[color,opacity,background-color]',
                   'hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                   kind === 'regular' && isFavorite && 'is-favorite',
                 )}
               >
                 <svg
                   viewBox="0 0 20 20"
-                  className="channel-context-glyph size-4"
+                  className="channel-context-glyph size-3.5"
                   aria-hidden="true"
                 >
                   <circle cx="5" cy="10" r="1.25" fill="currentColor" />
@@ -153,7 +153,7 @@ export function ChannelList({
                 </svg>
                 {kind === 'regular' && isFavorite ? (
                   <span
-                    className="channel-favorite-marker absolute text-[0.625rem] leading-none text-primary/75"
+                    className="channel-favorite-marker absolute text-[0.5625rem] leading-none text-primary/80"
                     aria-hidden="true"
                   >
                     ★
