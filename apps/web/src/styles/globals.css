@@ -39,8 +39,8 @@
   }
 
   .channel-favorite-marker {
-    top: 0.25rem;
-    right: 0.25rem;
+    top: 0.2rem;
+    right: 0.2rem;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -75,15 +75,22 @@
 
     .group:hover > .channel-context-trigger .channel-favorite-marker,
     .group:focus-within > .channel-context-trigger .channel-favorite-marker {
-      top: 0.25rem;
-      right: 0.25rem;
+      top: 0.2rem;
+      right: 0.2rem;
       translate: none;
       opacity: 1;
     }
   }
 
   @media (any-pointer: coarse) {
+    .channel-row-link,
+    .modular-nav-tab {
+      min-height: 2.75rem;
+    }
+
     .channel-context-trigger {
+      width: 2.75rem;
+      height: 2.75rem;
       pointer-events: auto;
       opacity: 1;
     }
