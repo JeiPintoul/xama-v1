@@ -40,28 +40,13 @@ export function CommunityNavigation({
         className,
       )}
     >
-      <header className="border-b border-border px-4 py-4">
-        <p className="truncate text-base font-semibold text-foreground">{community.name}</p>
-        <p className="mt-1 truncate text-xs text-text-muted">{community.description}</p>
-      </header>
-
-      {import.meta.env.DEV ? (
-        <section className="border-b border-border px-3 py-3" aria-label="Ferramentas de navegação">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-text-muted uppercase">
-              Modo
-            </p>
-            <span className="rounded-sm bg-surface-raised px-1.5 py-0.5 text-[0.625rem] font-semibold tracking-wide text-text-muted uppercase">
-              Dev
-            </span>
-          </div>
-          <NavigationModeMenu
-            requestedMode={requestedMode}
-            resolvedMode={resolvedMode}
-            onRequestedModeChange={onRequestedModeChange}
-          />
-        </section>
-      ) : null}
+      <NavigationModeMenu
+        communityName={community.name}
+        communityDescription={community.description}
+        requestedMode={requestedMode}
+        resolvedMode={resolvedMode}
+        onRequestedModeChange={onRequestedModeChange}
+      />
 
       <AdaptiveChannelNavigation
         community={community}
