@@ -5,6 +5,8 @@ import type { KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 
 type NavigationModeMenuProps = Readonly<{
+  communityName: string;
+  communityDescription: string;
   requestedMode: NavigationMode;
   resolvedMode: ResolvedNavigationMode;
   onRequestedModeChange: (mode: NavigationMode) => void;
@@ -17,7 +19,7 @@ const navigationModes = [
 ] as const satisfies readonly Readonly<{ value: NavigationMode; label: string }>[];
 
 const POPUP_GUTTER = 8;
-const POPUP_GAP = 4;
+const POPUP_GAP = 6;
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
@@ -34,7 +36,7 @@ function positionMenu(trigger: HTMLButtonElement, menu: HTMLDivElement) {
   const triggerBounds = trigger.getBoundingClientRect();
   const maximumMenuWidth = Math.max(0, viewportWidth - POPUP_GUTTER * 2);
 
-  menu.style.width = `${Math.min(triggerBounds.width, maximumMenuWidth)}px`;
+  menu.style.width = `${Math.min(Math.max(triggerBounds.width, 224), maximumMenuWidth)}px`;
   menu.style.maxHeight = `${Math.max(0, viewportHeight - POPUP_GUTTER * 2)}px`;
 
   const menuBounds = menu.getBoundingClientRect();
@@ -59,12 +61,14 @@ function getNavigationModeLabel(mode: NavigationMode): string {
 }
 
 export function NavigationModeMenu({
+  communityName,
+  communityDescription,
   requestedMode,
   resolvedMode,
   onRequestedModeChange,
 }: NavigationModeMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const idPrefix = `navigation-mode-${useId().replaceAll(':', '')}`;
+  const idPrefix = `community-menu-${useId().replaceAll(':', '')}`;
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -182,7 +186,7 @@ export function NavigationModeMenu({
   }
 
   return (
-    <div ref={containerRef} className="relative mt-2">
+    <div ref={containerRef} className="relative border-b border-border">
       <button
         ref={triggerRef}
         type="button"
@@ -192,13 +196,16 @@ export function NavigationModeMenu({
         aria-controls={`${idPrefix}-menu`}
         onClick={() => (isOpen ? closeMenu(false) : openMenu())}
         onKeyDown={handleTriggerKeyDown}
-        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md border border-border bg-background px-3 text-left text-sm font-medium text-foreground outline-none transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full min-w-0 items-center gap-2 px-3 py-3 text-left outline-none transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <span>{requestedModeLabel}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{communityName}</p>
+          <p className="mt-0.5 truncate text-[0.6875rem] text-text-muted">{communityDescription}</p>
+        </div>
         <svg
           viewBox="0 0 20 20"
           className={cn(
-            'size-4 shrink-0 text-text-muted transition-transform',
+            'size-3.5 shrink-0 text-text-muted transition-transform',
             isOpen && 'rotate-180',
           )}
           aria-hidden="true"
@@ -214,15 +221,23 @@ export function NavigationModeMenu({
         </svg>
       </button>
 
+      <span className="sr-only" aria-live="polite">
+        Exibindo {resolvedMode === 'simplified' ? 'Simplificado' : 'Modular'}
+      </span>
+
       {isOpen ? (
         <div
           ref={menuRef}
           id={`${idPrefix}-menu`}
           role="menu"
-          aria-label="Modos de navegação"
-          className="fixed z-[70] overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg shadow-background/30"
+          aria-label={`Opções de ${communityName}`}
+          className="fixed z-[70] overflow-y-auto rounded-md border border-border bg-popover p-1.5 shadow-lg shadow-background/30"
           style={{ left: 0, top: 0, visibility: 'hidden' }}
         >
+          <p className="px-2.5 pt-1.5 pb-1 text-[0.625rem] font-semibold tracking-[0.12em] text-text-muted uppercase">
+            Modo de navegação
+          </p>
+
           {navigationModes.map((option, index) => {
             const isSelected = option.value === requestedMode;
 
@@ -239,7 +254,7 @@ export function NavigationModeMenu({
                 onClick={() => selectMode(option.value)}
                 onKeyDown={(event) => handleOptionKeyDown(event, index)}
                 className={cn(
-                  'flex min-h-11 w-full items-center justify-between gap-3 rounded-sm px-3 text-left text-sm text-text-secondary outline-none transition-colors',
+                  'flex min-h-9 w-full items-center justify-between gap-3 rounded-sm px-2.5 text-left text-[0.8125rem] text-text-secondary outline-none transition-colors',
                   'hover:bg-surface-raised hover:text-foreground focus-visible:bg-surface-raised focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                   isSelected && 'text-foreground',
                 )}
@@ -247,7 +262,7 @@ export function NavigationModeMenu({
                 <span>{option.label}</span>
                 <svg
                   viewBox="0 0 20 20"
-                  className={cn('size-4 shrink-0 text-primary', !isSelected && 'invisible')}
+                  className={cn('size-3.5 shrink-0 text-primary', !isSelected && 'invisible')}
                   aria-hidden="true"
                 >
                   <path
@@ -264,10 +279,6 @@ export function NavigationModeMenu({
           })}
         </div>
       ) : null}
-
-      <p className="mt-2 text-xs text-text-muted" aria-live="polite">
-        Exibindo {resolvedMode === 'simplified' ? 'Simplificado' : 'Modular'}
-      </p>
     </div>
   );
 }
