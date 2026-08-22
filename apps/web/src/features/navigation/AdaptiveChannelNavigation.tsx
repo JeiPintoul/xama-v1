@@ -62,10 +62,10 @@ function ChannelSection({
 
   return (
     <section>
-      <h3 className="px-2 text-[0.6875rem] font-semibold tracking-[0.14em] text-text-muted uppercase">
+      <h3 className="px-2 text-[0.625rem] font-semibold tracking-[0.13em] text-text-muted uppercase">
         {title}
       </h3>
-      <div className="mt-2">
+      <div className="mt-1.5">
         <ChannelList
           channels={channels}
           community={community}
@@ -109,10 +109,6 @@ export function AdaptiveChannelNavigation({
   const visibleModularSections = allModularSections.filter(
     (section) => section.id !== 'favorites' || favoriteChannels.length > 0,
   );
-  if (channelActionsState.contextKey !== channelActionsContextKey) {
-    setChannelActionsState({ contextKey: channelActionsContextKey, request: null });
-  }
-
   const channelActions =
     channelActionsState.contextKey === channelActionsContextKey
       ? channelActionsState.request
@@ -223,7 +219,7 @@ export function AdaptiveChannelNavigation({
       ref={navigationRef}
       tabIndex={-1}
       aria-label={`Navegação de ${community.name}`}
-      className="min-h-0 flex-1 overflow-y-auto rounded-md px-2 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="min-h-0 flex-1 overflow-y-auto rounded-md px-1.5 py-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       {resolvedMode === 'simplified' ? (
         <>
@@ -236,7 +232,7 @@ export function AdaptiveChannelNavigation({
             />
           ) : null}
 
-          <div className={cn('space-y-5', favoriteChannels.length > 0 && 'mt-5')}>
+          <div className={cn('space-y-4', favoriteChannels.length > 0 && 'mt-4')}>
             <ChannelSection title="Canais de texto" channels={textChannels} {...channelListProps} />
             <ChannelSection title="Canais de voz" channels={voiceChannels} {...channelListProps} />
           </div>
@@ -247,7 +243,7 @@ export function AdaptiveChannelNavigation({
             role="tablist"
             aria-label={`Seções de ${community.name}`}
             className={cn(
-              'grid gap-1 rounded-md bg-background p-1',
+              'grid gap-0.5 rounded-md bg-background p-0.5',
               favoriteChannels.length > 0 ? 'grid-cols-[0.9fr_1.25fr_0.65fr_1.2fr]' : 'grid-cols-3',
             )}
           >
@@ -266,7 +262,7 @@ export function AdaptiveChannelNavigation({
                   onClick={() => selectModularSection(section.id)}
                   onKeyDown={(event) => handleTabKeyDown(event, section.id)}
                   className={cn(
-                    'min-h-11 min-w-0 truncate rounded-sm px-0.5 text-[0.6875rem] font-medium tracking-tight text-text-muted outline-none transition-colors',
+                    'modular-nav-tab min-h-9 min-w-0 truncate rounded-sm px-0.5 text-[0.625rem] font-medium tracking-tight text-text-muted outline-none transition-colors',
                     'hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
                     isActive && 'bg-surface-raised text-foreground',
                   )}
@@ -282,7 +278,7 @@ export function AdaptiveChannelNavigation({
             role="tabpanel"
             aria-labelledby={`${tabIdPrefix}-tab-text`}
             hidden={activeModularSection !== 'text'}
-            className="mt-5"
+            className="mt-4"
           >
             <ChannelSection title="Canais de texto" channels={textChannels} {...channelListProps} />
           </section>
@@ -293,7 +289,7 @@ export function AdaptiveChannelNavigation({
               role="tabpanel"
               aria-labelledby={`${tabIdPrefix}-tab-favorites`}
               hidden={activeModularSection !== 'favorites'}
-              className="mt-5"
+              className="mt-4"
             >
               <ChannelList channels={favoriteChannels} kind="favorites" {...channelListProps} />
             </section>
@@ -304,7 +300,7 @@ export function AdaptiveChannelNavigation({
             role="tabpanel"
             aria-labelledby={`${tabIdPrefix}-tab-voice`}
             hidden={activeModularSection !== 'voice'}
-            className="mt-5"
+            className="mt-4"
           >
             {voiceChannels.length > 0 ? (
               <ChannelSection
@@ -313,7 +309,7 @@ export function AdaptiveChannelNavigation({
                 {...channelListProps}
               />
             ) : (
-              <p className="px-2 text-sm leading-6 text-text-muted">
+              <p className="px-2 text-[0.8125rem] leading-5 text-text-muted">
                 Esta comunidade ainda não tem canais de voz.
               </p>
             )}
@@ -325,10 +321,12 @@ export function AdaptiveChannelNavigation({
             tabIndex={0}
             aria-labelledby={`${tabIdPrefix}-tab-activity`}
             hidden={activeModularSection !== 'activity'}
-            className="mt-5 px-2"
+            className="mt-4 px-2"
           >
-            <p className="text-sm font-medium text-foreground">Nenhuma atividade para mostrar.</p>
-            <p className="mt-2 text-xs leading-5 text-text-muted">
+            <p className="text-[0.8125rem] font-medium text-foreground">
+              Nenhuma atividade para mostrar.
+            </p>
+            <p className="mt-1.5 text-[0.6875rem] leading-5 text-text-muted">
               Esta área permanece experimental por enquanto.
             </p>
           </section>
