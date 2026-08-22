@@ -356,6 +356,43 @@ The architecture should allow favorite channels to later appear in future dashbo
 
 ---
 
+## Future Notification Preferences
+
+Notification preferences are intentionally separate from favorites.
+
+Favoriting a channel must not implicitly enable, disable, or otherwise change its notification behavior.
+
+Future notification controls should support a hierarchical and user-controlled model such as:
+
+```text
+community preference/default
+        ↓
+per-channel overrides
+        ↓
+user-defined exceptions
+```
+
+Users should be able to configure notification behavior at the community level while overriding individual channels when desired.
+
+Valid future configurations may include:
+
+```text
+favorite channel + muted
+non-favorite channel + notifications enabled
+muted community + selected channel exceptions
+all community notifications + selected muted channels
+```
+
+Favorites may eventually be offered as a convenience when configuring notification exceptions, but they remain a separate product concept.
+
+A channel's favorite state and notification state must therefore remain independently configurable.
+
+Notification controls may later be exposed through community and channel contextual menus.
+
+Do not implement notification infrastructure until its roadmap scope is explicitly defined.
+
+---
+
 ## Primary Content Area
 
 The primary content area represents the current user task.
