@@ -3,9 +3,10 @@ import { ScreenShareVideo } from '@/features/voice/ScreenShareVideo';
 
 type ScreenShareCollectionProps = Readonly<{
   screenShares: readonly ScreenShare[];
+  onFocus?: (screenShareId: string) => void;
 }>;
 
-export function ScreenShareCollection({ screenShares }: ScreenShareCollectionProps) {
+export function ScreenShareCollection({ screenShares, onFocus }: ScreenShareCollectionProps) {
   return (
     <section className="mt-6 rounded-lg border border-border bg-surface-raised p-5">
       <div className="flex items-baseline justify-between gap-4">
@@ -24,10 +25,10 @@ export function ScreenShareCollection({ screenShares }: ScreenShareCollectionPro
         <div
           className={`mt-4 grid gap-4 ${
             screenShares.length === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
-          }`}
+          } ${screenShares.length > 4 ? 'max-h-[calc(100svh-18rem)] overflow-y-auto pr-1' : ''}`}
         >
           {screenShares.map((screenShare) => (
-            <ScreenShareVideo key={screenShare.id} screenShare={screenShare} />
+            <ScreenShareVideo key={screenShare.id} screenShare={screenShare} onFocus={onFocus} />
           ))}
         </div>
       )}

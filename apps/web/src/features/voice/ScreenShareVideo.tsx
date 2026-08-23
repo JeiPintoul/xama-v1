@@ -4,9 +4,15 @@ import type { ScreenShare } from '@/features/voice/livekit-voice-session';
 
 type ScreenShareVideoProps = Readonly<{
   screenShare: ScreenShare;
+  onFocus?: (screenShareId: string) => void;
+  variant?: 'grid' | 'focus';
 }>;
 
-export function ScreenShareVideo({ screenShare }: ScreenShareVideoProps) {
+export function ScreenShareVideo({
+  screenShare,
+  onFocus,
+  variant = 'grid',
+}: ScreenShareVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [requiresAudioActivation, setRequiresAudioActivation] = useState(false);
 
@@ -41,18 +47,42 @@ export function ScreenShareVideo({ screenShare }: ScreenShareVideoProps) {
   }
 
   return (
-    <article className="overflow-hidden rounded-lg border border-border bg-background">
+    <article
+      className={
+        variant === 'focus'
+          ? 'flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-background'
+          : 'overflow-hidden rounded-lg border border-border bg-background'
+      }
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
-        <h4 className="truncate text-sm font-medium text-foreground">
-          {screenShare.participantName}
-        </h4>
-        {screenShare.isLocal ? <span className="text-xs text-text-muted">Você</span> : null}
+        <div className="flex min-w-0 items-center gap-2">
+          <h4 className="truncate text-sm font-medium text-foreground">
+            {screenShare.participantName}
+          </h4>
+          {screenShare.isLocal ? (
+            <span className="shrink-0 text-xs text-text-muted">Você</span>
+          ) : null}
+        </div>
+        {onFocus ? (
+          <button
+            type="button"
+            onClick={() => onFocus(screenShare.id)}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Focar tela de ${screenShare.participantName}`}
+          >
+            Focar
+          </button>
+        ) : null}
       </div>
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        className="aspect-video w-full bg-black object-contain"
+        className={
+          variant === 'focus'
+            ? 'min-h-0 w-full flex-1 bg-black object-contain'
+            : 'aspect-video w-full bg-black object-contain'
+        }
         aria-label={`Tela compartilhada por ${screenShare.participantName}`}
       />
       {requiresAudioActivation ? (

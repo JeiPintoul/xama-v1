@@ -1,9 +1,9 @@
 import type { Channel, Community } from '@xama/domain';
 import { useState } from 'react';
 
-import { ScreenShareCollection } from '@/features/voice/ScreenShareCollection';
 import { getOrCreateGuestIdentity, loadGuestIdentity } from '@/features/voice/guest-identity';
 import { getVoiceRoomName } from '@/features/voice/room-name';
+import { ScreenSharePresentation } from '@/features/voice/ScreenSharePresentation';
 import { useVoiceSession } from '@/features/voice/voice-session-context';
 
 type VoiceRoomSurfaceProps = Readonly<{
@@ -15,12 +15,28 @@ function getInitialDisplayName(): string {
   return loadGuestIdentity(window.localStorage)?.displayName ?? '';
 }
 
+function getScreenShareActionLabel(
+  operation: 'idle' | 'starting' | 'stopping',
+  isLocalScreenSharing: boolean,
+): string {
+  if (operation === 'starting') {
+    return 'Iniciando compartilhamento…';
+  }
+
+  if (operation === 'stopping') {
+    return 'Parando compartilhamento…';
+  }
+
+  return isLocalScreenSharing ? 'Parar compartilhamento' : 'Compartilhar tela';
+}
+
 export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) {
   const roomName = getVoiceRoomName(community.id, channel.id);
   const { snapshot, join, leave, startScreenShare, stopScreenShare } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [accessCode, setAccessCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const isCurrentRoom = snapshot.roomName === roomName;
   const isConnected = isCurrentRoom && snapshot.connectionState === 'connected';
   const isConnecting = isCurrentRoom && snapshot.connectionState === 'connecting';
@@ -56,45 +72,70 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
   if (isConnected || (isCurrentRoom && snapshot.connectionState === 'reconnecting')) {
     const participantCount = snapshot.participants.length;
     const isScreenShareOperationPending = snapshot.screenShareOperation !== 'idle';
+    const screenShareActionLabel = getScreenShareActionLabel(
+      snapshot.screenShareOperation,
+      snapshot.isLocalScreenSharing,
+    );
+    const toggleScreenShare = () =>
+      void (snapshot.isLocalScreenSharing ? stopScreenShare() : startScreenShare());
 
     return (
-      <div className="w-full max-w-2xl -translate-y-6 sm:-translate-y-8 lg:-translate-y-10">
-        <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
-          Conectado · {community.name}
-        </p>
-        <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-          {channel.name}
-        </h2>
-        <p className="mt-3 text-sm text-text-secondary">
-          Sala {roomName} ·{' '}
-          {snapshot.connectionState === 'reconnecting' ? 'Reconectando…' : 'Conectado'}
-        </p>
+      <div
+        className={
+          isFocusMode
+            ? 'w-full self-stretch'
+            : 'w-full max-w-2xl -translate-y-6 sm:-translate-y-8 lg:-translate-y-10'
+        }
+      >
+        {!isFocusMode ? (
+          <>
+            <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
+              Conectado · {community.name}
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {channel.name}
+            </h2>
+            <p className="mt-3 text-sm text-text-secondary">
+              Sala {roomName} ·{' '}
+              {snapshot.connectionState === 'reconnecting' ? 'Reconectando…' : 'Conectado'}
+            </p>
 
-        <section
-          className="mt-8 rounded-lg border border-border bg-surface-raised p-5"
-          aria-label="Participantes da sala"
-        >
-          <div className="flex items-baseline justify-between gap-4">
-            <h3 className="text-sm font-semibold text-foreground">Participantes</h3>
-            <span className="text-sm text-text-muted">
-              {participantCount} {participantCount === 1 ? 'pessoa' : 'pessoas'}
-            </span>
-          </div>
-          <ul className="mt-4 space-y-2">
-            {snapshot.participants.map((participant) => (
-              <li
-                key={participant.identity}
-                className="flex items-center gap-3 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary"
-              >
-                <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                <span className="truncate text-foreground">{participant.name}</span>
-                {participant.isLocal ? <span className="text-text-muted">Você</span> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
+            <section
+              className="mt-8 rounded-lg border border-border bg-surface-raised p-5"
+              aria-label="Participantes da sala"
+            >
+              <div className="flex items-baseline justify-between gap-4">
+                <h3 className="text-sm font-semibold text-foreground">Participantes</h3>
+                <span className="text-sm text-text-muted">
+                  {participantCount} {participantCount === 1 ? 'pessoa' : 'pessoas'}
+                </span>
+              </div>
+              <ul className="mt-4 space-y-2">
+                {snapshot.participants.map((participant) => (
+                  <li
+                    key={participant.identity}
+                    className="flex items-center gap-3 rounded-md bg-surface px-3 py-2 text-sm text-text-secondary"
+                  >
+                    <span className="size-2 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                    <span className="truncate text-foreground">{participant.name}</span>
+                    {participant.isLocal ? <span className="text-text-muted">Você</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        ) : null}
 
-        <ScreenShareCollection screenShares={snapshot.screenShares} />
+        <ScreenSharePresentation
+          screenShares={snapshot.screenShares}
+          onFocusModeChange={setIsFocusMode}
+          onToggleScreenShare={toggleScreenShare}
+          screenShareActionLabel={screenShareActionLabel}
+          isScreenShareActionDisabled={
+            snapshot.connectionState !== 'connected' || isScreenShareOperationPending
+          }
+          onLeave={() => void leave()}
+        />
 
         {snapshot.screenShareError ? (
           <p role="alert" className="mt-4 text-sm text-danger">
@@ -102,31 +143,25 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
           </p>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button
-            type="button"
-            disabled={snapshot.connectionState !== 'connected' || isScreenShareOperationPending}
-            onClick={() =>
-              void (snapshot.isLocalScreenSharing ? stopScreenShare() : startScreenShare())
-            }
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {snapshot.screenShareOperation === 'starting'
-              ? 'Iniciando compartilhamento…'
-              : snapshot.screenShareOperation === 'stopping'
-                ? 'Parando compartilhamento…'
-                : snapshot.isLocalScreenSharing
-                  ? 'Parar compartilhamento'
-                  : 'Compartilhar tela'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void leave()}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Sair
-          </button>
-        </div>
+        {!isFocusMode ? (
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={snapshot.connectionState !== 'connected' || isScreenShareOperationPending}
+              onClick={toggleScreenShare}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {screenShareActionLabel}
+            </button>
+            <button
+              type="button"
+              onClick={() => void leave()}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Sair
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
