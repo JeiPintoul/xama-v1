@@ -14,7 +14,15 @@ When the tactical sequence in this file conflicts with the older milestone order
 
 ## Current Stage
 
-Milestone 2 is functionally complete on branch `milestone-2` and is awaiting final local validation/merge into `main`.
+Milestone 2 has been validated and merged into `main`.
+
+Active implementation branch:
+
+```text
+alpha/screen-share
+```
+
+The LiveKit Cloud project and Supabase project required for the Screen Share Alpha have already been created. The project owner has the required provider credentials/secrets locally and must never place API secrets in chat, frontend code, or source control.
 
 Implemented foundation:
 
@@ -29,9 +37,10 @@ Implemented foundation:
 - user-specific mocked channel favorites;
 - custom application menus/context menus;
 - desktop and mobile navigation behavior;
-- compact default navigation density.
+- compact default navigation density;
+- GitHub Actions CI for lint, typecheck, tests, and build.
 
-No production backend, authentication, database, realtime chat, or media provider is integrated yet.
+No production database, authentication, realtime chat, or media integration exists yet.
 
 ---
 
@@ -78,15 +87,16 @@ Detailed scope and acceptance criteria live in `docs/SCREEN_SHARE_ALPHA.md`.
 
 ### SS0 — Infrastructure foundation
 
-- LiveKit Cloud project;
-- Supabase project only for the token Edge Function;
-- secure environment/secrets;
-- frontend media dependencies;
-- token endpoint contract.
+- implement the Supabase LiveKit-token Edge Function;
+- configure server-side secrets;
+- add required frontend LiveKit dependencies;
+- define safe frontend environment-variable contract;
+- define the provider boundary for token requests and room connections.
 
 ### SS1 — Real room connection
 
 - temporary guest identity;
+- alpha access code input;
 - join/leave a LiveKit room from an existing voice-channel route;
 - connection state;
 - real participants.
@@ -169,6 +179,27 @@ Screen-share audio capabilities depend on browser/OS capture support. Mobile web
 
 ---
 
+## Alpha Room Policy
+
+Only existing mocked voice channels are valid alpha rooms.
+
+Current voice channels are:
+
+```text
+xama-lab:lobby
+xama-lab:cafe
+game-on:lobby
+game-on:ranked
+game-on:afk
+clube-do-livro:sala-de-leitura
+```
+
+The token endpoint must not grant access to arbitrary caller-supplied room names outside this alpha allowlist.
+
+This duplication is acceptable for the temporary alpha security boundary and should disappear when communities/channels become server-backed.
+
+---
+
 ## Engineering Workflow
 
 Use Codex selectively for high-complexity implementation and debugging.
@@ -182,12 +213,12 @@ Prefer ChatGPT + GitHub for:
 - minor UI changes;
 - CI/configuration.
 
-For Codex tasks, use a fresh session for the Screen Share Alpha and keep prompts small by referencing:
+For the next Codex task, use a fresh session and read only:
 
 - `AGENTS.md`;
 - `docs/CURRENT_STATE.md`;
 - `docs/SCREEN_SHARE_ALPHA.md`;
-- only relevant sections of `docs/ARCHITECTURE.md` and `docs/UX.md`.
+- relevant LiveKit/Supabase sections of `docs/ARCHITECTURE.md`.
 
 Do not make Codex re-read all historical documentation unless necessary.
 
@@ -195,7 +226,4 @@ Do not make Codex re-read all historical documentation unless necessary.
 
 ## Next Action
 
-1. Validate and merge `milestone-2` into `main`.
-2. Create a fresh `alpha/screen-share` branch from the updated `main`.
-3. Complete the manual LiveKit/Supabase setup described in `SCREEN_SHARE_ALPHA.md`.
-4. Delegate SS0/SS1 implementation using a fresh Codex session.
+Implement SS0 + SS1 on `alpha/screen-share`, then validate two separate browser sessions/devices joining the same real LiveKit room before proceeding to screen publishing.
