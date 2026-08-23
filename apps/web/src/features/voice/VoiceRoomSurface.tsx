@@ -1,6 +1,7 @@
 import type { Channel, Community } from '@xama/domain';
 import { useState } from 'react';
 
+import { ScreenShareCollection } from '@/features/voice/ScreenShareCollection';
 import { getOrCreateGuestIdentity, loadGuestIdentity } from '@/features/voice/guest-identity';
 import { getVoiceRoomName } from '@/features/voice/room-name';
 import { useVoiceSession } from '@/features/voice/voice-session-context';
@@ -16,7 +17,7 @@ function getInitialDisplayName(): string {
 
 export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) {
   const roomName = getVoiceRoomName(community.id, channel.id);
-  const { snapshot, join, leave } = useVoiceSession();
+  const { snapshot, join, leave, startScreenShare, stopScreenShare } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [accessCode, setAccessCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
 
   if (isConnected || (isCurrentRoom && snapshot.connectionState === 'reconnecting')) {
     const participantCount = snapshot.participants.length;
+    const isScreenShareOperationPending = snapshot.screenShareOperation !== 'idle';
 
     return (
       <div className="w-full max-w-2xl -translate-y-6 sm:-translate-y-8 lg:-translate-y-10">
@@ -92,13 +94,39 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
           </ul>
         </section>
 
-        <button
-          type="button"
-          onClick={() => void leave()}
-          className="mt-6 rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Sair
-        </button>
+        <ScreenShareCollection screenShares={snapshot.screenShares} />
+
+        {snapshot.screenShareError ? (
+          <p role="alert" className="mt-4 text-sm text-danger">
+            {snapshot.screenShareError}
+          </p>
+        ) : null}
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            type="button"
+            disabled={snapshot.connectionState !== 'connected' || isScreenShareOperationPending}
+            onClick={() =>
+              void (snapshot.isLocalScreenSharing ? stopScreenShare() : startScreenShare())
+            }
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {snapshot.screenShareOperation === 'starting'
+              ? 'Iniciando compartilhamento…'
+              : snapshot.screenShareOperation === 'stopping'
+                ? 'Parando compartilhamento…'
+                : snapshot.isLocalScreenSharing
+                  ? 'Parar compartilhamento'
+                  : 'Compartilhar tela'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void leave()}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Sair
+          </button>
+        </div>
       </div>
     );
   }

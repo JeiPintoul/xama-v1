@@ -9,6 +9,8 @@ export type VoiceSessionContextValue = Readonly<{
   snapshot: VoiceSessionSnapshot;
   join: (request: JoinVoiceRoomRequest) => Promise<void>;
   leave: () => Promise<void>;
+  startScreenShare: () => Promise<void>;
+  stopScreenShare: () => Promise<void>;
 }>;
 
 export const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null);

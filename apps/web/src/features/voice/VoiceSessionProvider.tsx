@@ -16,11 +16,15 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
   );
   const join = useCallback((request: JoinVoiceRoomRequest) => session.join(request), [session]);
   const leave = useCallback(() => session.leave(), [session]);
+  const startScreenShare = useCallback(() => session.startScreenShare(), [session]);
+  const stopScreenShare = useCallback(() => session.stopScreenShare(), [session]);
 
   useEffect(() => () => void session.leave(), [session]);
 
   return (
-    <VoiceSessionContext.Provider value={{ snapshot, join, leave }}>
+    <VoiceSessionContext.Provider
+      value={{ snapshot, join, leave, startScreenShare, stopScreenShare }}
+    >
       {children}
     </VoiceSessionContext.Provider>
   );
