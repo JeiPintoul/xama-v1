@@ -1,17 +1,36 @@
-import type { Channel, Community } from '@xama/domain';
+import type { Channel, Community, NavigationMode, ResolvedNavigationMode } from '@xama/domain';
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 import { CommunityNavigation } from '@/features/navigation/CommunityNavigation';
 import { CommunityRail } from '@/features/navigation/CommunityRail';
+import type { ModularNavigationSection } from '@/features/navigation/navigation';
 
 type MobileNavigationProps = Readonly<{
   community: Community;
   selectedChannel: Channel;
+  requestedMode: NavigationMode;
+  resolvedMode: ResolvedNavigationMode;
+  activeModularSection: ModularNavigationSection;
+  favoriteChannelIds: readonly string[];
+  onRequestedModeChange: (mode: NavigationMode) => void;
+  onActiveModularSectionChange: (section: ModularNavigationSection) => void;
+  onToggleFavorite: (communityId: string, channelId: string) => void;
   onClose: () => void;
 }>;
 
-export function MobileNavigation({ community, selectedChannel, onClose }: MobileNavigationProps) {
+export function MobileNavigation({
+  community,
+  selectedChannel,
+  requestedMode,
+  resolvedMode,
+  activeModularSection,
+  favoriteChannelIds,
+  onRequestedModeChange,
+  onActiveModularSectionChange,
+  onToggleFavorite,
+  onClose,
+}: MobileNavigationProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
@@ -39,11 +58,13 @@ export function MobileNavigation({ community, selectedChannel, onClose }: Mobile
       return;
     }
 
-    const focusableElements = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    const firstFocusableElement = focusableElements?.item(0);
-    const lastFocusableElement = focusableElements?.item((focusableElements.length ?? 1) - 1);
+    const focusableElements = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    ).filter((element) => element.tabIndex >= 0 && !element.closest('[hidden]'));
+    const firstFocusableElement = focusableElements[0];
+    const lastFocusableElement = focusableElements.at(-1);
 
     if (!firstFocusableElement || !lastFocusableElement) {
       return;
@@ -103,6 +124,13 @@ export function MobileNavigation({ community, selectedChannel, onClose }: Mobile
           <CommunityNavigation
             community={community}
             selectedChannel={selectedChannel}
+            requestedMode={requestedMode}
+            resolvedMode={resolvedMode}
+            activeModularSection={activeModularSection}
+            favoriteChannelIds={favoriteChannelIds}
+            onRequestedModeChange={onRequestedModeChange}
+            onActiveModularSectionChange={onActiveModularSectionChange}
+            onToggleFavorite={onToggleFavorite}
             onNavigate={onClose}
             className="rounded-md"
           />

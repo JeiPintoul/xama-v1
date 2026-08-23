@@ -1,6 +1,8 @@
 import type { Channel, Community } from '@xama/domain';
 import type { Ref } from 'react';
 
+import { ChannelTypeIcon } from '@/features/navigation/ChannelTypeIcon';
+
 type PrimaryContentProps = Readonly<{
   community: Community;
   channel: Channel;
@@ -16,6 +18,8 @@ export function PrimaryContent({
   isNavigationOpen,
   onOpenNavigation,
 }: PrimaryContentProps) {
+  const isVoiceChannel = channel.type === 'voice';
+
   return (
     <main className="flex min-h-svh min-w-0 flex-col overflow-hidden bg-surface lg:min-h-0 lg:rounded-lg">
       <header className="flex min-h-16 min-w-0 items-center gap-3 border-b border-border px-3 sm:px-5">
@@ -32,9 +36,7 @@ export function PrimaryContent({
           <span aria-hidden="true">☰</span>
         </button>
 
-        <span className="text-xl text-text-muted" aria-hidden="true">
-          #
-        </span>
+        <ChannelTypeIcon type={channel.type} className="shrink-0 text-text-muted" />
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">
             {channel.name}
@@ -43,22 +45,24 @@ export function PrimaryContent({
         </div>
       </header>
 
-      <section className="flex min-h-0 flex-1 items-center overflow-y-auto px-6 py-12 sm:px-10 lg:px-14">
-        <div className="w-full max-w-2xl">
+      <section className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 py-12 sm:px-10 lg:px-14">
+        <div className="w-full max-w-2xl -translate-y-6 text-left sm:-translate-y-8 lg:-translate-y-10">
           <div className="grid size-12 place-items-center rounded-md bg-surface-raised text-2xl text-text-secondary">
-            <span aria-hidden="true">#</span>
+            <ChannelTypeIcon type={channel.type} className="text-text-secondary" />
           </div>
           <p className="mt-6 text-xs font-semibold tracking-[0.14em] text-primary uppercase">
-            {community.name}
+            {isVoiceChannel ? `Canal de voz · ${community.name}` : community.name}
           </p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Bem-vindo a #{channel.name}
+            {isVoiceChannel ? channel.name : `Bem-vindo a #${channel.name}`}
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary sm:text-base sm:leading-7">
             {channel.description}
           </p>
           <p className="mt-8 border-t border-border pt-5 text-sm text-text-muted">
-            Este espaço vai receber a experiência do canal nos próximos marcos.
+            {isVoiceChannel
+              ? 'Este canal de voz é apenas um destino de navegação neste marco.'
+              : 'Este espaço vai receber a experiência do canal nos próximos marcos.'}
           </p>
         </div>
       </section>

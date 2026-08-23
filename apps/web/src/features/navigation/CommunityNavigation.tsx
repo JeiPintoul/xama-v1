@@ -1,13 +1,21 @@
-import type { Channel, Community } from '@xama/domain';
-import { Link } from 'react-router';
+import type { Channel, Community, NavigationMode, ResolvedNavigationMode } from '@xama/domain';
 
+import { AdaptiveChannelNavigation } from '@/features/navigation/AdaptiveChannelNavigation';
 import { CurrentUserArea } from '@/features/navigation/CurrentUserArea';
-import { getChannelPath } from '@/features/navigation/navigation';
+import { NavigationModeMenu } from '@/features/navigation/NavigationModeMenu';
+import type { ModularNavigationSection } from '@/features/navigation/navigation';
 import { cn } from '@/lib/utils';
 
 type CommunityNavigationProps = Readonly<{
   community: Community;
   selectedChannel: Channel;
+  requestedMode: NavigationMode;
+  resolvedMode: ResolvedNavigationMode;
+  activeModularSection: ModularNavigationSection;
+  favoriteChannelIds: readonly string[];
+  onRequestedModeChange: (mode: NavigationMode) => void;
+  onActiveModularSectionChange: (section: ModularNavigationSection) => void;
+  onToggleFavorite: (communityId: string, channelId: string) => void;
   onNavigate?: () => void;
   className?: string;
 }>;
@@ -15,6 +23,13 @@ type CommunityNavigationProps = Readonly<{
 export function CommunityNavigation({
   community,
   selectedChannel,
+  requestedMode,
+  resolvedMode,
+  activeModularSection,
+  favoriteChannelIds,
+  onRequestedModeChange,
+  onActiveModularSectionChange,
+  onToggleFavorite,
   onNavigate,
   className,
 }: CommunityNavigationProps) {
@@ -25,47 +40,24 @@ export function CommunityNavigation({
         className,
       )}
     >
-      <header className="border-b border-border px-4 py-4">
-        <p className="truncate text-base font-semibold text-foreground">{community.name}</p>
-        <p className="mt-1 truncate text-xs text-text-muted">{community.description}</p>
-      </header>
+      <NavigationModeMenu
+        communityName={community.name}
+        communityDescription={community.description}
+        requestedMode={requestedMode}
+        resolvedMode={resolvedMode}
+        onRequestedModeChange={onRequestedModeChange}
+      />
 
-      <nav
-        aria-label={`Canais de ${community.name}`}
-        className="min-h-0 flex-1 overflow-y-auto px-2 py-4"
-      >
-        <p className="px-2 text-[0.6875rem] font-semibold tracking-[0.14em] text-text-muted uppercase">
-          Canais
-        </p>
-        <ul className="mt-2 space-y-1">
-          {community.channels.map((channel) => {
-            const isSelected = channel.id === selectedChannel.id;
-
-            return (
-              <li key={channel.id}>
-                <Link
-                  to={getChannelPath(community, channel)}
-                  onClick={onNavigate}
-                  aria-current={isSelected ? 'page' : undefined}
-                  className={cn(
-                    'flex min-h-11 min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-text-secondary outline-none transition-colors',
-                    'hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-                    isSelected && 'bg-surface-raised text-foreground',
-                  )}
-                >
-                  <span
-                    className={cn('text-base text-text-muted', isSelected && 'text-primary')}
-                    aria-hidden="true"
-                  >
-                    #
-                  </span>
-                  <span className="truncate">{channel.name}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <AdaptiveChannelNavigation
+        community={community}
+        selectedChannel={selectedChannel}
+        resolvedMode={resolvedMode}
+        activeModularSection={activeModularSection}
+        favoriteChannelIds={favoriteChannelIds}
+        onActiveModularSectionChange={onActiveModularSectionChange}
+        onNavigate={onNavigate}
+        onToggleFavorite={onToggleFavorite}
+      />
 
       <CurrentUserArea />
     </aside>
