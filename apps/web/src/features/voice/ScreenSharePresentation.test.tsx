@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ScreenSharePresentation } from '@/features/voice/ScreenSharePresentation';
@@ -33,13 +33,10 @@ const defaultProps = {
   onVolumeChange: vi.fn(),
   onAttachAudio: vi.fn(),
   onDetachAudio: vi.fn(),
-  onToggleScreenShare: vi.fn(),
-  screenShareActionLabel: 'Compartilhar tela',
-  isScreenShareActionDisabled: false,
-  onLeave: vi.fn(),
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -127,6 +124,21 @@ describe('screen share presentation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
 
     expect(screen.getByRole('button', { name: 'Voltar à grade' })).toBeInTheDocument();
+  });
+
+  it('hides focused viewing controls after inactivity and restores them with pointer activity', () => {
+    vi.useFakeTimers();
+    render(<ScreenSharePresentation screenShares={[firstScreenShare]} {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
+    act(() => vi.advanceTimersByTime(2800));
+
+    const overlay = screen.getByRole('button', { name: 'Voltar à grade' }).parentElement
+      ?.parentElement;
+    expect(overlay).toHaveClass('pointer-events-none');
+
+    fireEvent.pointerMove(screen.getByTestId('screen-share-focus-stage'));
+    expect(overlay).toHaveClass('opacity-100');
   });
 
   it('requests browser fullscreen for the selected share', () => {

@@ -7,12 +7,7 @@ import {
   type RemoteAudioTrack,
 } from 'livekit-client';
 
-import {
-  LiveKitTokenRequestError,
-  requestLiveKitToken,
-  type LiveKitConnectionDetails,
-  type LiveKitTokenRequest,
-} from '@/features/voice/livekit-token-client';
+import { type LiveKitConnectionDetails } from '@/features/voice/livekit-token-client';
 
 export type VoiceConnectionState =
   'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
@@ -45,10 +40,12 @@ export type VoiceSessionSnapshot = Readonly<{
   error: string | null;
 }>;
 
-export type JoinVoiceRoomRequest = LiveKitTokenRequest;
+export type JoinVoiceRoomRequest = Readonly<{
+  roomName: string;
+  getConnectionDetails: () => Promise<LiveKitConnectionDetails>;
+}>;
 
 type SnapshotListener = () => void;
-type TokenRequester = (request: LiveKitTokenRequest) => Promise<LiveKitConnectionDetails>;
 
 const initialSnapshot: VoiceSessionSnapshot = {
   roomName: null,
@@ -91,7 +88,7 @@ function getParticipants(room: Room): readonly VoiceParticipant[] {
 }
 
 function toSafeError(error: unknown): string {
-  if (error instanceof LiveKitTokenRequestError) {
+  if (error instanceof Error && error.message) {
     return error.message;
   }
 
@@ -106,11 +103,6 @@ export class LiveKitVoiceSession {
   private readonly screenShareAudioTracks = new Map<string, RemoteAudioTrack>();
   private removeRoomListeners: (() => void) | null = null;
 
-  constructor(
-    private readonly requestToken: TokenRequester = (request) =>
-      requestLiveKitToken(import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT ?? '', request),
-  ) {}
-
   getSnapshot = (): VoiceSessionSnapshot => this.snapshot;
 
   subscribe = (listener: SnapshotListener): (() => void) => {
@@ -121,7 +113,7 @@ export class LiveKitVoiceSession {
   async join(request: JoinVoiceRoomRequest): Promise<void> {
     await this.leave();
     this.setSnapshot({
-      roomName: request.room,
+      roomName: request.roomName,
       connectionState: 'connecting',
       participants: [],
       screenShares: [],
@@ -132,7 +124,7 @@ export class LiveKitVoiceSession {
     });
 
     try {
-      const connectionDetails = await this.requestToken(request);
+      const connectionDetails = await request.getConnectionDetails();
       const room = new Room();
       this.room = room;
       this.listenToRoom(room);
@@ -215,7 +207,19 @@ export class LiveKitVoiceSession {
     });
 
     try {
-      await room.localParticipant.setScreenShareEnabled(true, { audio: true });
+      const supportedConstraints =
+        typeof navigator !== 'undefined'
+          ? navigator.mediaDevices?.getSupportedConstraints?.()
+          : undefined;
+      const supportsOwnAudioRestriction =
+        (
+          supportedConstraints as
+            (MediaTrackSupportedConstraints & { restrictOwnAudio?: boolean }) | undefined
+        )?.restrictOwnAudio === true;
+      await room.localParticipant.setScreenShareEnabled(true, {
+        audio: true,
+        ...(supportsOwnAudioRestriction ? { restrictOwnAudio: true } : {}),
+      });
       this.publishRoomState(room, { screenShareOperation: 'idle', screenShareError: null });
     } catch {
       if (this.room !== room) {

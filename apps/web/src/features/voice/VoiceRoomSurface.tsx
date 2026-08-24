@@ -2,6 +2,7 @@ import type { Channel, Community } from '@xama/domain';
 import { useState } from 'react';
 
 import { getOrCreateGuestIdentity, loadGuestIdentity } from '@/features/voice/guest-identity';
+import { requestLiveKitToken } from '@/features/voice/livekit-token-client';
 import { getVoiceRoomName } from '@/features/voice/room-name';
 import { ScreenSharePresentation } from '@/features/voice/ScreenSharePresentation';
 import { useVoiceSession } from '@/features/voice/voice-session-context';
@@ -70,10 +71,14 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
       crypto.randomUUID(),
     );
     await join({
-      room: roomName,
-      identity: identity.id,
-      name: identity.displayName,
-      accessCode: normalizedAccessCode,
+      roomName,
+      getConnectionDetails: () =>
+        requestLiveKitToken(import.meta.env.VITE_LIVEKIT_TOKEN_ENDPOINT ?? '', {
+          room: roomName,
+          identity: identity.id,
+          name: identity.displayName,
+          accessCode: normalizedAccessCode,
+        }),
     });
     setAccessCode('');
   }
@@ -141,12 +146,6 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
           onVolumeChange={setScreenShareVolume}
           onAttachAudio={attachScreenShareAudio}
           onDetachAudio={detachScreenShareAudio}
-          onToggleScreenShare={toggleScreenShare}
-          screenShareActionLabel={screenShareActionLabel}
-          isScreenShareActionDisabled={
-            snapshot.connectionState !== 'connected' || isScreenShareOperationPending
-          }
-          onLeave={() => void leave()}
         />
 
         {snapshot.screenShareError ? (

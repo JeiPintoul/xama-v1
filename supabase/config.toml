@@ -1,2 +1,5 @@
 [functions.livekit-token]
 verify_jwt = false
+
+[functions.quick-room]
+verify_jwt = false

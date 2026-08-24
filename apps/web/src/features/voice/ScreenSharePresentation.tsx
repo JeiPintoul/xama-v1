@@ -10,10 +10,6 @@ type ScreenSharePresentationProps = Readonly<{
   onVolumeChange: (screenShareId: string, volume: number) => void;
   onAttachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
   onDetachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
-  onToggleScreenShare: () => void;
-  screenShareActionLabel: string;
-  isScreenShareActionDisabled: boolean;
-  onLeave: () => void;
 }>;
 
 export function ScreenSharePresentation({
@@ -22,14 +18,14 @@ export function ScreenSharePresentation({
   onVolumeChange,
   onAttachAudio,
   onDetachAudio,
-  onToggleScreenShare,
-  screenShareActionLabel,
-  isScreenShareActionDisabled,
-  onLeave,
 }: ScreenSharePresentationProps) {
   const [focusedScreenShareId, setFocusedScreenShareId] = useState<string | null>(null);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [areControlsVisible, setAreControlsVisible] = useState(true);
+  const [isControlActive, setIsControlActive] = useState(false);
   const fullscreenTargetRef = useRef<HTMLDivElement>(null);
+  const controlsTimeoutRef = useRef<number | null>(null);
   const supportsFullscreen =
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.requestFullscreen === 'function';
@@ -40,6 +36,28 @@ export function ScreenSharePresentation({
   useEffect(() => {
     onFocusModeChange(Boolean(focusedScreenShare));
   }, [focusedScreenShare, onFocusModeChange]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === fullscreenTargetRef.current);
+      setAreControlsVisible(true);
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!focusedScreenShare || isControlActive || !areControlsVisible) {
+      return;
+    }
+
+    controlsTimeoutRef.current = window.setTimeout(() => setAreControlsVisible(false), 2800);
+    return () => {
+      if (controlsTimeoutRef.current !== null) {
+        window.clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [areControlsVisible, focusedScreenShare, isControlActive]);
 
   async function enterFullscreen() {
     const target = fullscreenTargetRef.current;
@@ -56,53 +74,22 @@ export function ScreenSharePresentation({
     }
   }
 
+  function revealControls() {
+    setAreControlsVisible(true);
+  }
+
   if (focusedScreenShare) {
     return (
-      <section
-        className="flex min-h-[calc(100svh-4rem)] flex-col lg:min-h-[calc(100svh-8rem)]"
-        aria-label="Tela em foco"
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setFocusedScreenShareId(null)}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Voltar à grade
-          </button>
-          {supportsFullscreen ? (
-            <button
-              type="button"
-              onClick={() => void enterFullscreen()}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Tela cheia
-            </button>
-          ) : null}
-          <button
-            type="button"
-            disabled={isScreenShareActionDisabled}
-            onClick={onToggleScreenShare}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {screenShareActionLabel}
-          </button>
-          <button
-            type="button"
-            onClick={onLeave}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Sair
-          </button>
-        </div>
-        {fullscreenError ? (
-          <p role="alert" className="mb-3 text-sm text-danger">
-            {fullscreenError}
-          </p>
-        ) : null}
+      <section className="min-h-[100svh] bg-black" aria-label="Tela em foco">
         <div
           ref={fullscreenTargetRef}
-          className="min-h-0 flex-1 overflow-hidden rounded-lg bg-black"
+          data-testid="screen-share-focus-stage"
+          className={`relative flex min-h-[100svh] overflow-hidden bg-black ${
+            isFullscreen && !areControlsVisible ? 'cursor-none' : ''
+          }`}
+          onPointerMove={revealControls}
+          onTouchStart={revealControls}
+          onKeyDown={revealControls}
         >
           <ScreenShareVideo
             screenShare={focusedScreenShare}
@@ -111,6 +98,64 @@ export function ScreenSharePresentation({
             onAttachAudio={onAttachAudio}
             onDetachAudio={onDetachAudio}
           />
+          <div
+            className={`absolute inset-x-0 top-0 flex items-start justify-between gap-3 bg-gradient-to-b from-black/75 to-transparent p-4 transition-opacity duration-200 sm:p-5 ${
+              areControlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+            }`}
+            onPointerDown={() => setIsControlActive(true)}
+            onPointerUp={() => setIsControlActive(false)}
+            onFocusCapture={() => setIsControlActive(true)}
+            onBlurCapture={() => setIsControlActive(false)}
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">
+                {focusedScreenShare.participantName}
+              </p>
+              {focusedScreenShare.isLocal ? <p className="text-xs text-white/70">Você</p> : null}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              {!focusedScreenShare.isLocal && focusedScreenShare.hasAudio ? (
+                <label className="flex min-h-11 items-center gap-2 rounded-md bg-black/45 px-3 text-xs text-white backdrop-blur-sm">
+                  <span className="sr-only">Volume de {focusedScreenShare.participantName}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(focusedScreenShare.volume * 100)}
+                    onChange={(event) =>
+                      onVolumeChange(focusedScreenShare.id, Number(event.target.value) / 100)
+                    }
+                    className="w-24 accent-primary sm:w-36"
+                    aria-label={`Volume de ${focusedScreenShare.participantName}`}
+                  />
+                </label>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setFocusedScreenShareId(null)}
+                className="min-h-11 rounded-md bg-black/45 px-3 text-sm font-medium text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
+              >
+                Voltar à grade
+              </button>
+              {supportsFullscreen ? (
+                <button
+                  type="button"
+                  onClick={() => void enterFullscreen()}
+                  className="min-h-11 rounded-md bg-black/45 px-3 text-sm font-medium text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  {isFullscreen ? 'Em tela cheia' : 'Tela cheia'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {fullscreenError ? (
+            <p
+              role="alert"
+              className="absolute inset-x-4 bottom-4 rounded-md bg-black/70 px-3 py-2 text-sm text-white"
+            >
+              {fullscreenError}
+            </p>
+          ) : null}
         </div>
       </section>
     );

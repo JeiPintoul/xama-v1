@@ -1,5 +1,27 @@
 # Xama — Screen Share Alpha
 
+## QSB1 — Quick Share Beta
+
+Quick Share is the current public-test path:
+
+```text
+/
+→ create a temporary room or enter a code
+
+/r/:code
+→ dedicated sharing/viewing surface
+```
+
+The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing routes for continued development. Quick Share deliberately does not show that shell.
+
+Quick Rooms use server-generated 8-character codes from an unambiguous alphabet, mapped to `quick:` LiveKit room names. The `quick-room` Supabase Edge Function explicitly creates rooms with a 10-minute empty timeout, 60-second departure timeout, and 12-person limit, then returns a short-lived join/publish/subscribe token. Rooms are not persisted in the database; an expired code safely fails to join.
+
+QSB1 is account-free for the friend-group beta. Before broad public distribution, add server-side rate limiting, Cloudflare Turnstile or equivalent, and further creation controls if needed.
+
+Mobile web joining and viewing remain supported where browsers allow it. Publishing is capability-dependent and commonly unsupported on mobile web, so Quick Share explains that viewers can still watch rather than attempting capture. Remote share volume remains independently controlled from 0–100%; the future >100% Web Audio gain/limiting direction remains unchanged.
+
+Focused and browser-fullscreen viewing uses temporary, activity-revealed controls over the media rather than permanent bars. Screen-share capture requests `restrictOwnAudio` where browser capability reporting supports it, while falling back cleanly elsewhere.
+
 ## Objective
 
 Ship the smallest publicly usable version of Xama that validates the product's core value:
