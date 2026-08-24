@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { ScreenShare } from '@/features/voice/media-session';
+import type { ScreenShare, ScreenShareMediaDiagnostics } from '@/features/voice/media-session';
 import { ScreenShareCollection } from '@/features/voice/ScreenShareCollection';
 import { ScreenShareVideo } from '@/features/voice/ScreenShareVideo';
+import { useScreenWakeLock } from '@/features/voice/use-screen-wake-lock';
 
 type ScreenSharePresentationProps = Readonly<{
   screenShares: readonly ScreenShare[];
@@ -10,8 +11,11 @@ type ScreenSharePresentationProps = Readonly<{
   onWatch: (screenShareId: string) => void;
   onStopWatching: () => void;
   onVolumeChange: (screenShareId: string, volume: number) => void;
+  onAttachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
+  onDetachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
   onAttachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
   onDetachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  getDiagnostics: (screenShareId: string) => Promise<ScreenShareMediaDiagnostics | null>;
 }>;
 
 function FullscreenIcon({ exit = false }: Readonly<{ exit?: boolean }>) {
@@ -49,10 +53,12 @@ export function ScreenSharePresentation({
   onWatch,
   onStopWatching,
   onVolumeChange,
+  onAttachVideo,
+  onDetachVideo,
   onAttachAudio,
   onDetachAudio,
+  getDiagnostics,
 }: ScreenSharePresentationProps) {
-  const [focusedScreenShareId, setFocusedScreenShareId] = useState<string | null>(null);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
@@ -64,8 +70,10 @@ export function ScreenSharePresentation({
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.requestFullscreen === 'function';
   const focusedScreenShare = screenShares.find(
-    (screenShare) => screenShare.id === focusedScreenShareId,
+    (screenShare) => screenShare.watchState !== 'available',
   );
+
+  useScreenWakeLock(Boolean(focusedScreenShare));
 
   useEffect(() => {
     onFocusModeChange(Boolean(focusedScreenShare));
@@ -110,7 +118,6 @@ export function ScreenSharePresentation({
 
   function startWatching(screenShareId: string) {
     onWatch(screenShareId);
-    setFocusedScreenShareId(screenShareId);
     setAreControlsVisible(true);
   }
 
@@ -119,7 +126,6 @@ export function ScreenSharePresentation({
       await document.exitFullscreen();
     }
     onStopWatching();
-    setFocusedScreenShareId(null);
   }
 
   if (focusedScreenShare) {
@@ -138,11 +144,23 @@ export function ScreenSharePresentation({
           onTouchStart={() => setAreControlsVisible(true)}
           onKeyDown={() => setAreControlsVisible(true)}
         >
-          <ScreenShareVideo
-            screenShare={focusedScreenShare}
-            onAttachAudio={onAttachAudio}
-            onDetachAudio={onDetachAudio}
-          />
+          {focusedScreenShare.watchState === 'ready' ? (
+            <ScreenShareVideo
+              screenShare={focusedScreenShare}
+              onAttachVideo={onAttachVideo}
+              onDetachVideo={onDetachVideo}
+              onAttachAudio={onAttachAudio}
+              onDetachAudio={onDetachAudio}
+              getDiagnostics={getDiagnostics}
+            />
+          ) : (
+            <div
+              className="flex min-h-[100svh] w-full items-center justify-center bg-black px-6 text-center text-sm text-white/70"
+              role="status"
+            >
+              Assinando transmissÃ£oâ€¦
+            </div>
+          )}
           <div
             className={`absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/80 via-black/35 to-transparent px-4 pb-4 pt-16 transition-opacity duration-200 sm:px-5 sm:pb-5 ${
               areControlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'

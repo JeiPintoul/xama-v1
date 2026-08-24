@@ -20,6 +20,16 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
     (screenShareId: string, volume: number) => session.setScreenShareVolume(screenShareId, volume),
     [session],
   );
+  const attachScreenShareVideo = useCallback(
+    (screenShareId: string, element: HTMLVideoElement) =>
+      session.attachScreenShareVideo(screenShareId, element),
+    [session],
+  );
+  const detachScreenShareVideo = useCallback(
+    (screenShareId: string, element: HTMLVideoElement) =>
+      session.detachScreenShareVideo(screenShareId, element),
+    [session],
+  );
   const attachScreenShareAudio = useCallback(
     (screenShareId: string, element: HTMLAudioElement) =>
       session.attachScreenShareAudio(screenShareId, element),
@@ -35,6 +45,10 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
     [session],
   );
   const stopWatchingScreenShare = useCallback(() => session.stopWatchingScreenShare(), [session]);
+  const getScreenShareDiagnostics = useCallback(
+    (screenShareId: string) => session.getScreenShareDiagnostics(screenShareId),
+    [session],
+  );
 
   useEffect(() => () => void session.leave(), [session]);
 
@@ -47,8 +61,11 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
         startScreenShare,
         stopScreenShare,
         setScreenShareVolume,
+        attachScreenShareVideo,
+        detachScreenShareVideo,
         attachScreenShareAudio,
         detachScreenShareAudio,
+        getScreenShareDiagnostics,
         watchScreenShare,
         stopWatchingScreenShare,
       }}

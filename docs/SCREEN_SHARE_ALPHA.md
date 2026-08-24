@@ -22,6 +22,12 @@ Mobile web joining and viewing remain supported where browsers allow it. Publish
 
 Focused and browser-fullscreen viewing uses temporary, activity-revealed controls over the media rather than permanent bars. Screen-share capture requests `restrictOwnAudio` where browser capability reporting supports it, while falling back cleanly elsewhere.
 
+### QSB1.2 — Quality and efficiency
+
+Remote screen shares are represented from their publications before media subscription. `Assistir` subscribes only the selected screen-share video and optional screen-share audio; leaving Focus unsubscribes and detaches both while viewer-presence signaling remains independent of frame delivery.
+
+The LiveKit adapter owns provider tracks and SDK element attachment. Rooms use `adaptiveStream` with background video pausing and `dynacast`; publishing targets 1920×1080 at 30 FPS with the official LiveKit 1080p30 screen-share encoding, simulcast, and official 360p15/720p15 lower layers. Focus requests best-effort Screen Wake Lock, and development builds expose compact on-demand track diagnostics without production UI.
+
 ## Objective
 
 Ship the smallest publicly usable version of Xama that validates the product's core value:

@@ -12,6 +12,8 @@ alpha/screen-share
 
 The LiveKit media core is working and has been validated in real rooms: realtime presence, multiple simultaneous screen shares, screen-share audio, Grid, Focus, browser fullscreen, independent per-share volume, desktop viewing, and mobile viewing.
 
+QSB1.2 makes `Assistir` a real selective media subscription. Remote screen-share publications remain visible while their video and screen-share audio are unsubscribed; Focus subscribes only the chosen share and stopping Focus unsubscribes and detaches it. LiveKit now uses SDK video attachment with adaptive stream/background video pausing, dynacast, and an explicit 1080p30 simulcast publishing profile with 360p/720p lower layers. Focus also uses best-effort Screen Wake Lock, and development builds include a compact on-demand per-track diagnostics panel.
+
 The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing development routes. They are not the public beta entry point.
 
 ## Public-Test Path: Quick Share Beta (QSB1)
@@ -50,4 +52,4 @@ Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel h
 
 ## Next Action
 
-Validate the Quick Share flow over HTTPS with two browsers/devices: create room, share its link, join, then publish two simultaneous shares.
+Validate QSB1.2 over HTTPS with two browsers/devices: confirm available shares consume no remote screen media before `Assistir`, video/audio subscribe only in Focus, stopping releases delivery, and background/foreground recovery preserves viewing and viewer presence.

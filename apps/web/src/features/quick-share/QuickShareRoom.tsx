@@ -36,8 +36,11 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
     startScreenShare,
     stopScreenShare,
     setScreenShareVolume,
+    attachScreenShareVideo,
+    detachScreenShareVideo,
     attachScreenShareAudio,
     detachScreenShareAudio,
+    getScreenShareDiagnostics,
     watchScreenShare,
     stopWatchingScreenShare,
   } = useVoiceSession();
@@ -233,8 +236,11 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
           onWatch={watchScreenShare}
           onStopWatching={stopWatchingScreenShare}
           onVolumeChange={setScreenShareVolume}
+          onAttachVideo={attachScreenShareVideo}
+          onDetachVideo={detachScreenShareVideo}
           onAttachAudio={attachScreenShareAudio}
           onDetachAudio={detachScreenShareAudio}
+          getDiagnostics={getScreenShareDiagnostics}
         />
         {!isFocusMode ? (
           <section className="mt-5 flex flex-wrap items-center gap-3">

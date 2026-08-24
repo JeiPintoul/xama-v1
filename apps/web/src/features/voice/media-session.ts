@@ -9,16 +9,29 @@ export type VoiceParticipant = Readonly<{
 
 export type ScreenShareViewer = VoiceParticipant;
 
+export type ScreenShareWatchState = 'available' | 'subscribing' | 'ready';
+
+export type ScreenShareAudioState = 'none' | 'available' | 'subscribing' | 'ready';
+
+export type ScreenShareMediaDiagnostics = Readonly<{
+  provider: string;
+  bitrateKbps: number | null;
+  framesPerSecond: number | null;
+  codec: string | null;
+  streamState: 'active' | 'paused' | 'unknown';
+}>;
+
 export type ScreenShare = Readonly<{
   id: string;
   participantIdentity: string;
   participantName: string;
   isLocal: boolean;
   hasAudio: boolean;
+  audioState: ScreenShareAudioState;
   audioTrackId: string | null;
+  watchState: ScreenShareWatchState;
   volume: number;
   viewers: readonly ScreenShareViewer[];
-  mediaStream: MediaStream;
 }>;
 
 export type VoiceSessionSnapshot = Readonly<{

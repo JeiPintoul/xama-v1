@@ -40,8 +40,11 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
     startScreenShare,
     stopScreenShare,
     setScreenShareVolume,
+    attachScreenShareVideo,
+    detachScreenShareVideo,
     attachScreenShareAudio,
     detachScreenShareAudio,
+    getScreenShareDiagnostics,
     watchScreenShare,
     stopWatchingScreenShare,
   } = useVoiceSession();
@@ -148,8 +151,11 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
           onWatch={watchScreenShare}
           onStopWatching={stopWatchingScreenShare}
           onVolumeChange={setScreenShareVolume}
+          onAttachVideo={attachScreenShareVideo}
+          onDetachVideo={detachScreenShareVideo}
           onAttachAudio={attachScreenShareAudio}
           onDetachAudio={detachScreenShareAudio}
+          getDiagnostics={getScreenShareDiagnostics}
         />
 
         {snapshot.screenShareError ? (

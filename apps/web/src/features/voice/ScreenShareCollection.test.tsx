@@ -4,18 +4,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { ScreenShareCollection } from '@/features/voice/ScreenShareCollection';
 import type { ScreenShare } from '@/features/voice/media-session';
 
-const mediaStream = new MediaStream();
-
 const firstScreenShare: ScreenShare = {
   id: 'guest-a:track-a',
   participantIdentity: 'guest-a',
   participantName: 'Ana',
   isLocal: true,
   hasAudio: false,
+  audioState: 'none',
   audioTrackId: null,
+  watchState: 'available',
   volume: 1,
   viewers: [],
-  mediaStream,
 };
 
 const secondScreenShare: ScreenShare = {
@@ -24,10 +23,11 @@ const secondScreenShare: ScreenShare = {
   participantName: 'Bia',
   isLocal: false,
   hasAudio: false,
+  audioState: 'none',
   audioTrackId: null,
+  watchState: 'available',
   volume: 1,
   viewers: [],
-  mediaStream,
 };
 
 describe('screen share collection', () => {
