@@ -71,31 +71,31 @@ export function QuickShareLanding() {
   }
 
   return (
-    <main className="relative flex min-h-svh overflow-hidden bg-background px-5 py-6 text-foreground sm:px-8 sm:py-8">
+    <main className="relative flex min-h-svh overflow-hidden bg-background px-4 py-4 text-foreground sm:px-7 sm:py-6">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,oklch(0.37_0.08_260_/_0.2),transparent_34rem)]" />
-      <div className="relative mx-auto flex w-full max-w-[78rem] flex-col">
-        <header className="flex justify-center pt-1 sm:pt-3">
+      <div className="relative mx-auto flex w-full max-w-[72rem] flex-col">
+        <header className="flex justify-center pt-1 sm:pt-2">
           <img
             src="/brand/xama-lockup.png"
             alt="Xama"
-            className="h-[clamp(2.5rem,3.4vw,3.25rem)] w-auto"
+            className="h-[clamp(2.25rem,2.8vw,2.875rem)] w-auto"
           />
         </header>
-        <section className="flex flex-1 items-center justify-center py-[clamp(3.5rem,8vh,7rem)]">
-          <div className="w-full max-w-[min(100%,38rem)] text-center">
+        <section className="flex flex-1 items-center justify-center py-[clamp(2.5rem,6vh,5.25rem)]">
+          <div className="w-full max-w-[min(100%,34rem)] text-center">
             <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase sm:text-sm">
               Quick Share Beta
             </p>
-            <h1 className="mt-4 text-[clamp(2.5rem,5.2vw,4.75rem)] leading-[0.98] font-semibold tracking-[-0.055em] text-balance">
+            <h1 className="mt-3 text-[clamp(2.2rem,4.25vw,4rem)] leading-[0.99] font-semibold tracking-[-0.05em] text-balance">
               Compartilhe sua tela.
               <br />
               Sem complicação.
             </h1>
-            <p className="mx-auto mt-5 max-w-lg text-[clamp(1rem,1.3vw,1.125rem)] leading-7 text-text-secondary">
+            <p className="mx-auto mt-4 max-w-md text-[clamp(0.95rem,1.05vw,1.05rem)] leading-6 text-text-secondary sm:leading-7">
               Crie uma sala e envie o link. Quem receber entra para assistir ou compartilhar também.
             </p>
 
-            <div className="mx-auto mt-8 max-w-xl rounded-xl border border-border bg-surface/90 p-4 text-left shadow-xl shadow-black/20 sm:mt-10 sm:p-5">
+            <div className="mx-auto mt-7 max-w-[32rem] rounded-xl border border-border bg-surface/90 p-4 text-left shadow-xl shadow-black/20 sm:mt-8 sm:p-5">
               <label htmlFor="quick-display-name" className="text-sm font-medium text-foreground">
                 Seu nome
               </label>
@@ -120,7 +120,7 @@ export function QuickShareLanding() {
               <div className="my-5 flex items-center gap-3 text-xs text-text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
                 ou
               </div>
-              <form onSubmit={goToRoom} className="flex gap-2">
+              <form onSubmit={goToRoom} className="flex flex-col gap-2 sm:flex-row">
                 <label className="sr-only" htmlFor="quick-room-code">
                   Código da sala
                 </label>
@@ -134,7 +134,7 @@ export function QuickShareLanding() {
                 />
                 <button
                   type="submit"
-                  className="min-h-12 rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  className="min-h-12 w-full rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
                 >
                   Entrar
                 </button>
