@@ -7,43 +7,15 @@ import {
   type RemoteAudioTrack,
 } from 'livekit-client';
 
-import { type LiveKitConnectionDetails } from '@/features/voice/livekit-token-client';
+import type {
+  JoinVoiceRoomRequest,
+  ScreenShare,
+  VoiceConnectionState,
+  VoiceParticipant,
+  VoiceSessionSnapshot,
+} from '@/features/voice/media-session';
 
-export type VoiceConnectionState =
-  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
-
-export type VoiceParticipant = Readonly<{
-  identity: string;
-  name: string;
-  isLocal: boolean;
-}>;
-
-export type ScreenShare = Readonly<{
-  id: string;
-  participantIdentity: string;
-  participantName: string;
-  isLocal: boolean;
-  hasAudio: boolean;
-  audioTrackId: string | null;
-  volume: number;
-  mediaStream: MediaStream;
-}>;
-
-export type VoiceSessionSnapshot = Readonly<{
-  roomName: string | null;
-  connectionState: VoiceConnectionState;
-  participants: readonly VoiceParticipant[];
-  screenShares: readonly ScreenShare[];
-  isLocalScreenSharing: boolean;
-  screenShareOperation: 'idle' | 'starting' | 'stopping';
-  screenShareError: string | null;
-  error: string | null;
-}>;
-
-export type JoinVoiceRoomRequest = Readonly<{
-  roomName: string;
-  getConnectionDetails: () => Promise<LiveKitConnectionDetails>;
-}>;
+const viewerPresenceTopic = 'xama.screen-share-viewer';
 
 type SnapshotListener = () => void;
 
@@ -101,6 +73,8 @@ export class LiveKitVoiceSession {
   private readonly listeners = new Set<SnapshotListener>();
   private readonly screenShareStreams = new Map<string, MediaStream>();
   private readonly screenShareAudioTracks = new Map<string, RemoteAudioTrack>();
+  private readonly screenShareVolumes = new Map<string, number>();
+  private readonly screenShareViewerSelections = new Map<string, string>();
   private removeRoomListeners: (() => void) | null = null;
 
   getSnapshot = (): VoiceSessionSnapshot => this.snapshot;
@@ -130,6 +104,7 @@ export class LiveKitVoiceSession {
       this.listenToRoom(room);
       await room.connect(connectionDetails.serverUrl, connectionDetails.token);
       this.publishRoomState(room);
+      void this.requestViewerPresence(room);
     } catch (error) {
       const room = this.room;
       this.room = null;
@@ -138,6 +113,7 @@ export class LiveKitVoiceSession {
       await room?.disconnect();
       this.clearScreenShareStreams();
       this.clearScreenShareAudioTracks();
+      this.clearScreenSharePresence();
       this.setSnapshot({
         roomName: null,
         connectionState: 'idle',
@@ -159,6 +135,7 @@ export class LiveKitVoiceSession {
     await room?.disconnect();
     this.clearScreenShareStreams();
     this.clearScreenShareAudioTracks();
+    this.clearScreenSharePresence();
     this.setSnapshot(initialSnapshot);
   }
 
@@ -182,8 +159,36 @@ export class LiveKitVoiceSession {
       return;
     }
 
-    remoteParticipant.setVolume(Math.min(1, Math.max(0, volume)), Track.Source.ScreenShareAudio);
+    const normalizedVolume = Math.min(1, Math.max(0, volume));
+    remoteParticipant.setVolume(normalizedVolume, Track.Source.ScreenShareAudio);
+    this.screenShareVolumes.set(screenShareId, normalizedVolume);
     this.publishRoomState(room);
+  }
+
+  watchScreenShare(screenShareId: string): void {
+    const room = this.room;
+    if (
+      !room ||
+      room.state !== ConnectionState.Connected ||
+      !this.snapshot.screenShares.some((screenShare) => screenShare.id === screenShareId)
+    ) {
+      return;
+    }
+
+    this.screenShareViewerSelections.set(room.localParticipant.identity, screenShareId);
+    this.publishRoomState(room);
+    void this.publishViewerPresence(room, screenShareId);
+  }
+
+  stopWatchingScreenShare(): void {
+    const room = this.room;
+    if (!room || room.state !== ConnectionState.Connected) {
+      return;
+    }
+
+    this.screenShareViewerSelections.delete(room.localParticipant.identity);
+    this.publishRoomState(room);
+    void this.publishViewerPresence(room, null);
   }
 
   attachScreenShareAudio(screenShareId: string, element: HTMLAudioElement): void {
@@ -264,10 +269,24 @@ export class LiveKitVoiceSession {
     const syncRoomState = () => this.publishRoomState(room);
     const syncLocalScreenShare = () =>
       this.publishRoomState(room, { screenShareOperation: 'idle', screenShareError: null });
+    const removeViewerPresence = (participant: { identity: string }) => {
+      this.screenShareViewerSelections.delete(participant.identity);
+      syncRoomState();
+    };
+    const syncViewerPresence = (
+      payload: Uint8Array,
+      participant: { identity: string } | undefined,
+      _kind: unknown,
+      topic: string | undefined,
+    ) => {
+      if (topic === viewerPresenceTopic && participant) {
+        this.handleViewerPresence(room, payload, participant.identity);
+      }
+    };
 
     room.on(RoomEvent.ConnectionStateChanged, syncRoomState);
     room.on(RoomEvent.ParticipantConnected, syncRoomState);
-    room.on(RoomEvent.ParticipantDisconnected, syncRoomState);
+    room.on(RoomEvent.ParticipantDisconnected, removeViewerPresence);
     room.on(RoomEvent.TrackPublished, syncRoomState);
     room.on(RoomEvent.TrackSubscribed, syncRoomState);
     room.on(RoomEvent.TrackUnpublished, syncRoomState);
@@ -275,11 +294,12 @@ export class LiveKitVoiceSession {
     room.on(RoomEvent.LocalTrackPublished, syncLocalScreenShare);
     room.on(RoomEvent.LocalTrackUnpublished, syncLocalScreenShare);
     room.on(RoomEvent.Disconnected, syncRoomState);
+    room.on(RoomEvent.DataReceived, syncViewerPresence);
 
     this.removeRoomListeners = () => {
       room.off(RoomEvent.ConnectionStateChanged, syncRoomState);
       room.off(RoomEvent.ParticipantConnected, syncRoomState);
-      room.off(RoomEvent.ParticipantDisconnected, syncRoomState);
+      room.off(RoomEvent.ParticipantDisconnected, removeViewerPresence);
       room.off(RoomEvent.TrackPublished, syncRoomState);
       room.off(RoomEvent.TrackSubscribed, syncRoomState);
       room.off(RoomEvent.TrackUnpublished, syncRoomState);
@@ -287,6 +307,7 @@ export class LiveKitVoiceSession {
       room.off(RoomEvent.LocalTrackPublished, syncLocalScreenShare);
       room.off(RoomEvent.LocalTrackUnpublished, syncLocalScreenShare);
       room.off(RoomEvent.Disconnected, syncRoomState);
+      room.off(RoomEvent.DataReceived, syncViewerPresence);
     };
   }
 
@@ -305,6 +326,7 @@ export class LiveKitVoiceSession {
     const screenShares = isDisconnected ? [] : this.getScreenShares(room);
     if (isDisconnected) {
       this.clearScreenShareAudioTracks();
+      this.clearScreenSharePresence();
     }
     this.setSnapshot({
       roomName: this.snapshot.roomName,
@@ -354,7 +376,8 @@ export class LiveKitVoiceSession {
             isLocal: participant === room.localParticipant,
             hasAudio: Boolean(audioTrack),
             audioTrackId: audioPublication?.trackSid ?? null,
-            volume: remoteParticipant?.getVolume(Track.Source.ScreenShareAudio) ?? 1,
+            volume: this.screenShareVolumes.get(id) ?? 1,
+            viewers: this.getScreenShareViewers(room, id),
             mediaStream: this.getScreenShareStream(id, [videoTrack]),
           },
         ];
@@ -364,6 +387,13 @@ export class LiveKitVoiceSession {
     for (const id of this.screenShareStreams.keys()) {
       if (!activeShareIds.has(id)) {
         this.screenShareStreams.delete(id);
+        this.screenShareVolumes.delete(id);
+      }
+    }
+
+    for (const [identity, screenShareId] of this.screenShareViewerSelections) {
+      if (!activeShareIds.has(screenShareId)) {
+        this.screenShareViewerSelections.delete(identity);
       }
     }
 
@@ -409,8 +439,97 @@ export class LiveKitVoiceSession {
     this.screenShareAudioTracks.clear();
   }
 
+  private getScreenShareViewers(room: Room, screenShareId: string): readonly VoiceParticipant[] {
+    const participants = getParticipants(room);
+    return Array.from(this.screenShareViewerSelections.entries()).flatMap(
+      ([identity, watchedScreenShareId]) => {
+        if (watchedScreenShareId !== screenShareId) {
+          return [];
+        }
+
+        const participant = participants.find((candidate) => candidate.identity === identity);
+        return participant ? [participant] : [];
+      },
+    );
+  }
+
+  private handleViewerPresence(room: Room, payload: Uint8Array, participantIdentity: string): void {
+    try {
+      const message: unknown = JSON.parse(new TextDecoder().decode(payload));
+      if (!isViewerPresenceMessage(message)) {
+        return;
+      }
+
+      if (message.type === 'request') {
+        void this.publishViewerPresence(
+          room,
+          this.screenShareViewerSelections.get(room.localParticipant.identity) ?? null,
+        );
+        return;
+      }
+
+      if (message.screenShareId) {
+        this.screenShareViewerSelections.set(participantIdentity, message.screenShareId);
+      } else {
+        this.screenShareViewerSelections.delete(participantIdentity);
+      }
+      this.publishRoomState(room);
+    } catch {
+      return;
+    }
+  }
+
+  private publishViewerPresence(room: Room, screenShareId: string | null): void {
+    if (this.room !== room || room.state !== ConnectionState.Connected) {
+      return;
+    }
+
+    void room.localParticipant
+      .publishData(new TextEncoder().encode(JSON.stringify({ type: 'selection', screenShareId })), {
+        reliable: true,
+        topic: viewerPresenceTopic,
+      })
+      .catch(() => undefined);
+  }
+
+  private requestViewerPresence(room: Room): void {
+    if (this.room !== room || room.state !== ConnectionState.Connected) {
+      return;
+    }
+
+    void room.localParticipant
+      .publishData(new TextEncoder().encode(JSON.stringify({ type: 'request' })), {
+        reliable: true,
+        topic: viewerPresenceTopic,
+      })
+      .catch(() => undefined);
+  }
+
+  private clearScreenSharePresence(): void {
+    this.screenShareVolumes.clear();
+    this.screenShareViewerSelections.clear();
+  }
+
   private setSnapshot(snapshot: VoiceSessionSnapshot): void {
     this.snapshot = snapshot;
     this.listeners.forEach((listener) => listener());
   }
+}
+
+function isViewerPresenceMessage(
+  message: unknown,
+): message is { type: 'request' } | { type: 'selection'; screenShareId: string | null } {
+  if (!message || typeof message !== 'object' || !('type' in message)) {
+    return false;
+  }
+
+  if (message.type === 'request') {
+    return true;
+  }
+
+  return (
+    message.type === 'selection' &&
+    'screenShareId' in message &&
+    (typeof message.screenShareId === 'string' || message.screenShareId === null)
+  );
 }

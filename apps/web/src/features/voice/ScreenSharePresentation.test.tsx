@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ScreenShare } from '@/features/voice/media-session';
 import { ScreenSharePresentation } from '@/features/voice/ScreenSharePresentation';
-import type { ScreenShare } from '@/features/voice/livekit-voice-session';
 
 const mediaStream = new MediaStream();
 
@@ -14,6 +14,7 @@ const firstScreenShare: ScreenShare = {
   hasAudio: true,
   audioTrackId: 'audio-a',
   volume: 1,
+  viewers: [],
   mediaStream,
 };
 
@@ -25,11 +26,14 @@ const secondScreenShare: ScreenShare = {
   hasAudio: true,
   audioTrackId: 'audio-b',
   volume: 0.4,
+  viewers: [],
   mediaStream,
 };
 
 const defaultProps = {
   onFocusModeChange: vi.fn(),
+  onWatch: vi.fn(),
+  onStopWatching: vi.fn(),
   onVolumeChange: vi.fn(),
   onAttachAudio: vi.fn(),
   onDetachAudio: vi.fn(),
@@ -41,107 +45,72 @@ afterEach(() => {
 });
 
 describe('screen share presentation', () => {
-  it('focuses one share and returns to the complete grid without duplicating its video', () => {
+  it('starts playback only after selecting a share and can stop watching it', () => {
+    const onWatch = vi.fn();
+    const onStopWatching = vi.fn();
     const { container } = render(
       <ScreenSharePresentation
         screenShares={[firstScreenShare, secondScreenShare]}
         {...defaultProps}
+        onWatch={onWatch}
+        onStopWatching={onStopWatching}
       />,
     );
 
-    expect(screen.getAllByLabelText(/Tela compartilhada por/)).toHaveLength(2);
-    expect(container.querySelectorAll('audio')).toHaveLength(2);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Assistir tela de Ana' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
-
-    expect(screen.getByRole('button', { name: 'Voltar à grade' })).toBeInTheDocument();
-    expect(screen.getAllByLabelText('Tela compartilhada por Ana')).toHaveLength(1);
+    expect(onWatch).toHaveBeenCalledWith(firstScreenShare.id);
+    expect(screen.getByLabelText('Tela compartilhada por Ana')).toBeInTheDocument();
     expect(screen.queryByLabelText('Tela compartilhada por Bia')).not.toBeInTheDocument();
-    expect(container.querySelectorAll('audio')).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Voltar à grade' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Parar de assistir a tela de Ana' }));
 
-    expect(screen.getAllByLabelText(/Tela compartilhada por/)).toHaveLength(2);
-    expect(container.querySelectorAll('audio')).toHaveLength(2);
+    expect(onStopWatching).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Assistir tela de Ana' })).toBeInTheDocument();
   });
 
-  it('returns to the grid when the focused share is removed', () => {
-    const { rerender } = render(
-      <ScreenSharePresentation
-        screenShares={[firstScreenShare, secondScreenShare]}
-        {...defaultProps}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
-    rerender(<ScreenSharePresentation screenShares={[secondScreenShare]} {...defaultProps} />);
-
-    expect(screen.queryByRole('button', { name: 'Voltar à grade' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Tela compartilhada por Bia')).toBeInTheDocument();
-  });
-
-  it('keeps independent remote share volumes when switching between grid and focus', () => {
+  it('keeps the selected volume in sync with the focused control', () => {
     const onVolumeChange = vi.fn();
-    const firstScreenShareAtQuarterVolume = { ...firstScreenShare, volume: 0.25 };
-    const secondScreenShareAtMute = { ...secondScreenShare, volume: 0 };
     const { rerender } = render(
       <ScreenSharePresentation
-        screenShares={[firstScreenShare, secondScreenShare]}
+        screenShares={[firstScreenShare]}
         {...defaultProps}
         onVolumeChange={onVolumeChange}
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Assistir tela de Ana' }));
     fireEvent.click(screen.getByRole('button', { name: 'Volume de Ana: 100%' }));
     fireEvent.change(screen.getByLabelText('Volume de Ana'), { target: { value: '25' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Volume de Bia: 40%' }));
-    fireEvent.change(screen.getByLabelText('Volume de Bia'), { target: { value: '0' } });
-
-    expect(onVolumeChange).toHaveBeenNthCalledWith(1, firstScreenShare.id, 0.25);
-    expect(onVolumeChange).toHaveBeenNthCalledWith(2, secondScreenShare.id, 0);
+    expect(onVolumeChange).toHaveBeenCalledWith(firstScreenShare.id, 0.25);
 
     rerender(
       <ScreenSharePresentation
-        screenShares={[firstScreenShareAtQuarterVolume, secondScreenShareAtMute]}
+        screenShares={[{ ...firstScreenShare, volume: 0.25 }]}
         {...defaultProps}
         onVolumeChange={onVolumeChange}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
-
     expect(screen.getByLabelText('Volume de Ana')).toHaveValue('25');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Voltar à grade' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Volume de Ana: 25%' }));
-
-    expect(screen.getByLabelText('Volume de Ana')).toHaveValue('25');
-    expect(screen.getByRole('button', { name: 'Volume de Bia: 0%' })).toBeInTheDocument();
   });
 
-  it('keeps mobile-equivalent focus controls available when fullscreen is unsupported', () => {
-    render(<ScreenSharePresentation screenShares={[firstScreenShare]} {...defaultProps} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
-
-    expect(screen.getByRole('button', { name: 'Voltar à grade' })).toBeInTheDocument();
-  });
-
-  it('hides focused viewing controls after inactivity and restores them with pointer activity', () => {
+  it('hides focused controls after inactivity and restores them with pointer activity', () => {
     vi.useFakeTimers();
     render(<ScreenSharePresentation screenShares={[firstScreenShare]} {...defaultProps} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistir tela de Ana' }));
     act(() => vi.advanceTimersByTime(2800));
 
-    const overlay = screen.getByRole('button', { name: 'Voltar à grade' }).parentElement
-      ?.parentElement;
-    expect(overlay).toHaveClass('pointer-events-none');
+    const controls = screen.getByRole('button', { name: 'Parar de assistir a tela de Ana' })
+      .parentElement?.parentElement;
+    expect(controls).toHaveClass('pointer-events-none');
 
     fireEvent.pointerMove(screen.getByTestId('screen-share-focus-stage'));
-    expect(overlay).toHaveClass('opacity-100');
+    expect(controls).toHaveClass('opacity-100');
   });
 
-  it('requests browser fullscreen for the selected share', () => {
+  it('uses an icon control to request browser fullscreen', () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
       configurable: true,
@@ -149,9 +118,8 @@ describe('screen share presentation', () => {
     });
 
     render(<ScreenSharePresentation screenShares={[firstScreenShare]} {...defaultProps} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Focar tela de Ana' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Tela cheia' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assistir tela de Ana' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar em tela cheia' }));
 
     expect(requestFullscreen).toHaveBeenCalledTimes(1);
   });

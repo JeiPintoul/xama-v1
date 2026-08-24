@@ -38,7 +38,7 @@ export function CommunityRail({ selectedCommunityId, onNavigate, className }: Co
         className="grid size-11 shrink-0 place-items-center rounded-md outline-none transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Início do Xama"
       >
-        <img className="size-9 object-contain" src="/brand/xama-symbol.png" alt="" />
+        <img className="h-9 w-auto object-contain" src="/brand/xama-symbol.png" alt="" />
       </Link>
 
       <div className="my-3 h-px w-8 shrink-0 bg-border" aria-hidden="true" />

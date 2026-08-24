@@ -1,40 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { ScreenShare } from '@/features/voice/livekit-voice-session';
+import type { ScreenShare } from '@/features/voice/media-session';
 
 type ScreenShareVideoProps = Readonly<{
   screenShare: ScreenShare;
-  onFocus?: (screenShareId: string) => void;
-  onVolumeChange?: (screenShareId: string, volume: number) => void;
   onAttachAudio?: (screenShareId: string, element: HTMLAudioElement) => void;
   onDetachAudio?: (screenShareId: string, element: HTMLAudioElement) => void;
-  variant?: 'grid' | 'focus';
 }>;
-
-function getVolumePercentage(volume: number): number {
-  return Math.round(volume * 100);
-}
 
 export function ScreenShareVideo({
   screenShare,
-  onFocus,
-  onVolumeChange,
   onAttachAudio,
   onDetachAudio,
-  variant = 'grid',
 }: ScreenShareVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [requiresAudioActivation, setRequiresAudioActivation] = useState(false);
-  const [isVolumeControlOpen, setIsVolumeControlOpen] = useState(false);
-  const canControlAudio = !screenShare.isLocal && screenShare.hasAudio && Boolean(onVolumeChange);
-  const volumePercentage = getVolumePercentage(screenShare.volume);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) {
-      return;
-    }
+    if (!video) return;
 
     video.srcObject = screenShare.mediaStream;
     video.muted = screenShare.isLocal;
@@ -78,9 +63,7 @@ export function ScreenShareVideo({
 
   function activateAudio() {
     const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
+    if (!audio) return;
 
     void audio.play().then(
       () => setRequiresAudioActivation(false),
@@ -88,117 +71,25 @@ export function ScreenShareVideo({
     );
   }
 
-  function setVolume(value: string) {
-    onVolumeChange?.(screenShare.id, Number(value) / 100);
-  }
-
-  const video = (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      className={
-        variant === 'focus'
-          ? 'h-full w-full bg-black object-contain'
-          : 'aspect-video w-full bg-black object-contain'
-      }
-      aria-label={`Tela compartilhada por ${screenShare.participantName}`}
-    />
-  );
-
   return (
-    <article
-      className={
-        variant === 'focus'
-          ? 'h-full w-full overflow-hidden bg-black'
-          : 'overflow-hidden rounded-lg border border-border bg-background'
-      }
-    >
-      {variant === 'grid' ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <h4 className="truncate text-sm font-medium text-foreground">
-              {screenShare.participantName}
-            </h4>
-            {screenShare.isLocal ? (
-              <span className="shrink-0 text-xs text-text-muted">Você</span>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {canControlAudio && variant === 'grid' ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsVolumeControlOpen((isOpen) => !isOpen)}
-                  className="min-h-11 min-w-11 rounded-md px-2 text-xs font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={`Volume de ${screenShare.participantName}: ${volumePercentage}%`}
-                  aria-expanded={isVolumeControlOpen}
-                >
-                  {volumePercentage === 0 ? 'Mudo' : 'Som'}
-                </button>
-                {isVolumeControlOpen ? (
-                  <div className="absolute top-full right-0 z-10 mt-1 w-52 rounded-md border border-border bg-popover p-3 shadow-lg">
-                    <label
-                      htmlFor={`screen-share-volume-${screenShare.id}`}
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Volume: {volumePercentage}%
-                    </label>
-                    <input
-                      id={`screen-share-volume-${screenShare.id}`}
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={volumePercentage}
-                      onChange={(event) => setVolume(event.target.value)}
-                      className="mt-3 w-full accent-primary"
-                      aria-label={`Volume de ${screenShare.participantName}`}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            {onFocus ? (
-              <button
-                type="button"
-                onClick={() => onFocus(screenShare.id)}
-                className="min-h-11 rounded-md px-3 text-xs font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={`Abrir tela de ${screenShare.participantName} em foco`}
-              >
-                Foco
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-      {onFocus ? (
-        <button
-          type="button"
-          onClick={() => onFocus(screenShare.id)}
-          className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-label={`Focar tela de ${screenShare.participantName}`}
-        >
-          {video}
-        </button>
-      ) : (
-        video
-      )}
+    <div className="relative h-full w-full bg-black">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className="h-full w-full bg-black object-contain"
+        aria-label={`Tela compartilhada por ${screenShare.participantName}`}
+      />
       {!screenShare.isLocal && screenShare.hasAudio ? <audio ref={audioRef} autoPlay /> : null}
       {requiresAudioActivation ? (
-        <div
-          className={
-            variant === 'focus' ? 'absolute bottom-4 left-4 z-10' : 'border-t border-border p-3'
-          }
+        <button
+          type="button"
+          onClick={activateAudio}
+          className="absolute bottom-4 left-4 z-10 min-h-11 rounded-md bg-black/65 px-3 py-1.5 text-sm font-medium text-white outline-none backdrop-blur-sm hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-white"
         >
-          <button
-            type="button"
-            onClick={activateAudio}
-            className="min-h-11 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            Ativar áudio
-          </button>
-        </div>
+          Ativar áudio
+        </button>
       ) : null}
-    </article>
+    </div>
   );
 }

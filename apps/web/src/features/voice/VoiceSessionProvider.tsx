@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { PropsWithChildren } from 'react';
 
-import {
-  LiveKitVoiceSession,
-  type JoinVoiceRoomRequest,
-} from '@/features/voice/livekit-voice-session';
+import { LiveKitVoiceSession } from '@/features/voice/livekit-voice-session';
+import type { JoinVoiceRoomRequest } from '@/features/voice/media-session';
 import { VoiceSessionContext } from '@/features/voice/voice-session-context';
 
 export function VoiceSessionProvider({ children }: PropsWithChildren) {
@@ -32,6 +30,11 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
       session.detachScreenShareAudio(screenShareId, element),
     [session],
   );
+  const watchScreenShare = useCallback(
+    (screenShareId: string) => session.watchScreenShare(screenShareId),
+    [session],
+  );
+  const stopWatchingScreenShare = useCallback(() => session.stopWatchingScreenShare(), [session]);
 
   useEffect(() => () => void session.leave(), [session]);
 
@@ -46,6 +49,8 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
         setScreenShareVolume,
         attachScreenShareAudio,
         detachScreenShareAudio,
+        watchScreenShare,
+        stopWatchingScreenShare,
       }}
     >
       {children}

@@ -38,6 +38,8 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
     setScreenShareVolume,
     attachScreenShareAudio,
     detachScreenShareAudio,
+    watchScreenShare,
+    stopWatchingScreenShare,
   } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [isFocusMode, setIsFocusMode] = useState(false);
@@ -156,7 +158,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
         <header className="border-b border-border bg-surface px-4 py-3 sm:px-6">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <img src="/brand/xama-symbol.png" alt="Xama" className="size-7" />
+              <img src="/brand/xama-symbol.png" alt="Xama" className="h-7 w-auto" />
               <div>
                 <p className="text-xs font-medium tracking-[0.12em] text-primary uppercase">
                   Quick Share
@@ -165,7 +167,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
               </div>
               <span className="hidden text-sm text-text-muted sm:inline">
                 {snapshot.participants.length}{' '}
-                {snapshot.participants.length === 1 ? 'pessoa' : 'pessoas'}
+                {snapshot.participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}
               </span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -188,9 +190,48 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
         </header>
       ) : null}
       <div className={isFocusMode ? '' : 'mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-7'}>
+        {!isFocusMode ? (
+          <section
+            className="mb-5 rounded-xl border border-border bg-surface/70 p-4 sm:p-5"
+            aria-label="Participantes da sala"
+          >
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Na sala</h2>
+                <p className="mt-1 text-sm text-text-muted">Pessoas conectadas agora</p>
+              </div>
+              <span className="shrink-0 text-sm text-text-muted">
+                {snapshot.participants.length}{' '}
+                {snapshot.participants.length === 1 ? 'pessoa' : 'pessoas'}
+              </span>
+            </div>
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {snapshot.participants.map((participant) => (
+                <li
+                  key={participant.identity}
+                  className="flex min-w-0 items-center gap-3 rounded-lg border border-border/70 bg-background/70 px-3 py-2.5"
+                >
+                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                    {participant.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {participant.name}
+                    </span>
+                    <span className="block text-xs text-text-muted">
+                      {participant.isLocal ? 'Você' : 'Conectado'}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <ScreenSharePresentation
           screenShares={snapshot.screenShares}
           onFocusModeChange={setIsFocusMode}
+          onWatch={watchScreenShare}
+          onStopWatching={stopWatchingScreenShare}
           onVolumeChange={setScreenShareVolume}
           onAttachAudio={attachScreenShareAudio}
           onDetachAudio={detachScreenShareAudio}

@@ -72,27 +72,31 @@ export function QuickShareLanding() {
 
   return (
     <main className="relative flex min-h-svh overflow-hidden bg-background px-5 py-6 text-foreground sm:px-8 sm:py-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,oklch(0.35_0.08_260_/_0.18),transparent_32rem)]" />
-      <div className="relative mx-auto flex w-full max-w-5xl flex-col">
-        <header>
-          <img src="/brand/xama-lockup.png" alt="Xama" className="h-8 w-auto sm:h-10" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,oklch(0.37_0.08_260_/_0.2),transparent_34rem)]" />
+      <div className="relative mx-auto flex w-full max-w-[78rem] flex-col">
+        <header className="flex justify-center pt-1 sm:pt-3">
+          <img
+            src="/brand/xama-lockup.png"
+            alt="Xama"
+            className="h-[clamp(2.5rem,3.4vw,3.25rem)] w-auto"
+          />
         </header>
-        <section className="flex flex-1 items-center py-12 sm:py-16">
-          <div className="w-full max-w-xl">
-            <p className="text-sm font-medium tracking-[0.16em] text-primary uppercase">
+        <section className="flex flex-1 items-center justify-center py-[clamp(3.5rem,8vh,7rem)]">
+          <div className="w-full max-w-[min(100%,38rem)] text-center">
+            <p className="text-xs font-semibold tracking-[0.18em] text-primary uppercase sm:text-sm">
               Quick Share Beta
             </p>
-            <h1 className="mt-5 text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
+            <h1 className="mt-4 text-[clamp(2.5rem,5.2vw,4.75rem)] leading-[0.98] font-semibold tracking-[-0.055em] text-balance">
               Compartilhe sua tela.
               <br />
               Sem complicação.
             </h1>
-            <p className="mt-5 max-w-md text-base leading-7 text-text-secondary sm:text-lg">
+            <p className="mx-auto mt-5 max-w-lg text-[clamp(1rem,1.3vw,1.125rem)] leading-7 text-text-secondary">
               Crie uma sala e envie o link. Quem receber entra para assistir ou compartilhar também.
             </p>
 
-            <div className="mt-10 rounded-xl border border-border bg-surface/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
-              <label htmlFor="quick-display-name" className="text-sm font-medium">
+            <div className="mx-auto mt-8 max-w-xl rounded-xl border border-border bg-surface/90 p-4 text-left shadow-xl shadow-black/20 sm:mt-10 sm:p-5">
+              <label htmlFor="quick-display-name" className="text-sm font-medium text-foreground">
                 Seu nome
               </label>
               <input

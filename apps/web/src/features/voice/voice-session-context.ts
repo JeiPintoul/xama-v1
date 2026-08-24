@@ -1,9 +1,6 @@
 import { createContext, useContext } from 'react';
 
-import type {
-  JoinVoiceRoomRequest,
-  VoiceSessionSnapshot,
-} from '@/features/voice/livekit-voice-session';
+import type { JoinVoiceRoomRequest, VoiceSessionSnapshot } from '@/features/voice/media-session';
 
 export type VoiceSessionContextValue = Readonly<{
   snapshot: VoiceSessionSnapshot;
@@ -14,6 +11,8 @@ export type VoiceSessionContextValue = Readonly<{
   setScreenShareVolume: (screenShareId: string, volume: number) => void;
   attachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
   detachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  watchScreenShare: (screenShareId: string) => void;
+  stopWatchingScreenShare: () => void;
 }>;
 
 export const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null);

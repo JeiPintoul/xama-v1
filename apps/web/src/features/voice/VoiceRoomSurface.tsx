@@ -42,6 +42,8 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
     setScreenShareVolume,
     attachScreenShareAudio,
     detachScreenShareAudio,
+    watchScreenShare,
+    stopWatchingScreenShare,
   } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [accessCode, setAccessCode] = useState('');
@@ -143,6 +145,8 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
         <ScreenSharePresentation
           screenShares={snapshot.screenShares}
           onFocusModeChange={setIsFocusMode}
+          onWatch={watchScreenShare}
+          onStopWatching={stopWatchingScreenShare}
           onVolumeChange={setScreenShareVolume}
           onAttachAudio={attachScreenShareAudio}
           onDetachAudio={detachScreenShareAudio}
