@@ -12,6 +12,8 @@ const firstScreenShare: ScreenShare = {
   participantName: 'Ana',
   isLocal: true,
   hasAudio: false,
+  audioTrackId: null,
+  volume: 1,
   mediaStream,
 };
 
@@ -21,6 +23,8 @@ const secondScreenShare: ScreenShare = {
   participantName: 'Bia',
   isLocal: false,
   hasAudio: false,
+  audioTrackId: null,
+  volume: 1,
   mediaStream,
 };
 

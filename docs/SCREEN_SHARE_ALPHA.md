@@ -246,6 +246,10 @@ Provide concise guidance when useful, for example that the user may need to enab
 
 Do not make unsupported screen-share audio block video sharing.
 
+Viewer volume is local to each participant and screen share. Normal alpha volume ranges from 0% to
+100%. A future optional boost above 100% should use a Web Audio gain/limiting stage, never alter the
+publisher's audio.
+
 ---
 
 ## Multiple Simultaneous Shares

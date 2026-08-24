@@ -32,7 +32,16 @@ function getScreenShareActionLabel(
 
 export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) {
   const roomName = getVoiceRoomName(community.id, channel.id);
-  const { snapshot, join, leave, startScreenShare, stopScreenShare } = useVoiceSession();
+  const {
+    snapshot,
+    join,
+    leave,
+    startScreenShare,
+    stopScreenShare,
+    setScreenShareVolume,
+    attachScreenShareAudio,
+    detachScreenShareAudio,
+  } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [accessCode, setAccessCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -83,7 +92,7 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
       <div
         className={
           isFocusMode
-            ? 'w-full self-stretch'
+            ? 'w-[calc(100%+3rem)] -mx-6 -my-12 self-stretch sm:w-[calc(100%+5rem)] sm:-mx-10 lg:w-[calc(100%+7rem)] lg:-mx-14'
             : 'w-full max-w-2xl -translate-y-6 sm:-translate-y-8 lg:-translate-y-10'
         }
       >
@@ -129,6 +138,9 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
         <ScreenSharePresentation
           screenShares={snapshot.screenShares}
           onFocusModeChange={setIsFocusMode}
+          onVolumeChange={setScreenShareVolume}
+          onAttachAudio={attachScreenShareAudio}
+          onDetachAudio={detachScreenShareAudio}
           onToggleScreenShare={toggleScreenShare}
           screenShareActionLabel={screenShareActionLabel}
           isScreenShareActionDisabled={

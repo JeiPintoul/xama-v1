@@ -18,12 +18,35 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
   const leave = useCallback(() => session.leave(), [session]);
   const startScreenShare = useCallback(() => session.startScreenShare(), [session]);
   const stopScreenShare = useCallback(() => session.stopScreenShare(), [session]);
+  const setScreenShareVolume = useCallback(
+    (screenShareId: string, volume: number) => session.setScreenShareVolume(screenShareId, volume),
+    [session],
+  );
+  const attachScreenShareAudio = useCallback(
+    (screenShareId: string, element: HTMLAudioElement) =>
+      session.attachScreenShareAudio(screenShareId, element),
+    [session],
+  );
+  const detachScreenShareAudio = useCallback(
+    (screenShareId: string, element: HTMLAudioElement) =>
+      session.detachScreenShareAudio(screenShareId, element),
+    [session],
+  );
 
   useEffect(() => () => void session.leave(), [session]);
 
   return (
     <VoiceSessionContext.Provider
-      value={{ snapshot, join, leave, startScreenShare, stopScreenShare }}
+      value={{
+        snapshot,
+        join,
+        leave,
+        startScreenShare,
+        stopScreenShare,
+        setScreenShareVolume,
+        attachScreenShareAudio,
+        detachScreenShareAudio,
+      }}
     >
       {children}
     </VoiceSessionContext.Provider>

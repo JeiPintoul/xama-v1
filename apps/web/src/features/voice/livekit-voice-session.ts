@@ -1,4 +1,11 @@
-import { ConnectionState, Room, RoomEvent, Track } from 'livekit-client';
+import {
+  ConnectionState,
+  isRemoteTrack,
+  Room,
+  RoomEvent,
+  Track,
+  type RemoteAudioTrack,
+} from 'livekit-client';
 
 import {
   LiveKitTokenRequestError,
@@ -22,6 +29,8 @@ export type ScreenShare = Readonly<{
   participantName: string;
   isLocal: boolean;
   hasAudio: boolean;
+  audioTrackId: string | null;
+  volume: number;
   mediaStream: MediaStream;
 }>;
 
@@ -94,6 +103,7 @@ export class LiveKitVoiceSession {
   private snapshot: VoiceSessionSnapshot = initialSnapshot;
   private readonly listeners = new Set<SnapshotListener>();
   private readonly screenShareStreams = new Map<string, MediaStream>();
+  private readonly screenShareAudioTracks = new Map<string, RemoteAudioTrack>();
   private removeRoomListeners: (() => void) | null = null;
 
   constructor(
@@ -135,6 +145,7 @@ export class LiveKitVoiceSession {
       this.removeRoomListeners = null;
       await room?.disconnect();
       this.clearScreenShareStreams();
+      this.clearScreenShareAudioTracks();
       this.setSnapshot({
         roomName: null,
         connectionState: 'idle',
@@ -155,7 +166,40 @@ export class LiveKitVoiceSession {
     this.removeRoomListeners = null;
     await room?.disconnect();
     this.clearScreenShareStreams();
+    this.clearScreenShareAudioTracks();
     this.setSnapshot(initialSnapshot);
+  }
+
+  setScreenShareVolume(screenShareId: string, volume: number): void {
+    const room = this.room;
+    const screenShare = this.snapshot.screenShares.find(
+      (candidate) => candidate.id === screenShareId,
+    );
+    if (
+      !room ||
+      room.state !== ConnectionState.Connected ||
+      !screenShare ||
+      screenShare.isLocal ||
+      !screenShare.hasAudio
+    ) {
+      return;
+    }
+
+    const remoteParticipant = room.remoteParticipants.get(screenShare.participantIdentity);
+    if (!remoteParticipant) {
+      return;
+    }
+
+    remoteParticipant.setVolume(Math.min(1, Math.max(0, volume)), Track.Source.ScreenShareAudio);
+    this.publishRoomState(room);
+  }
+
+  attachScreenShareAudio(screenShareId: string, element: HTMLAudioElement): void {
+    this.screenShareAudioTracks.get(screenShareId)?.attach(element);
+  }
+
+  detachScreenShareAudio(screenShareId: string, element: HTMLAudioElement): void {
+    this.screenShareAudioTracks.get(screenShareId)?.detach(element);
   }
 
   async startScreenShare(): Promise<void> {
@@ -255,6 +299,9 @@ export class LiveKitVoiceSession {
 
     const isDisconnected = room.state === ConnectionState.Disconnected;
     const screenShares = isDisconnected ? [] : this.getScreenShares(room);
+    if (isDisconnected) {
+      this.clearScreenShareAudioTracks();
+    }
     this.setSnapshot({
       roomName: this.snapshot.roomName,
       connectionState: toVoiceConnectionState(room.state),
@@ -268,6 +315,7 @@ export class LiveKitVoiceSession {
 
   private getScreenShares(room: Room): readonly ScreenShare[] {
     const activeShareIds = new Set<string>();
+    const activeAudioShareIds = new Set<string>();
     const screenShares = [room.localParticipant, ...room.remoteParticipants.values()].flatMap(
       (participant) => {
         const screenPublication = participant.getTrackPublication(Track.Source.ScreenShare);
@@ -277,11 +325,22 @@ export class LiveKitVoiceSession {
           return [];
         }
 
-        const audioTrack = participant.getTrackPublication(Track.Source.ScreenShareAudio)
-          ?.audioTrack?.mediaStreamTrack;
+        const remoteParticipant = room.remoteParticipants.get(participant.identity);
+        const audioPublication = participant.getTrackPublication(Track.Source.ScreenShareAudio);
+        const remoteAudioTrack = remoteParticipant?.getTrackPublication(
+          Track.Source.ScreenShareAudio,
+        )?.audioTrack;
+        const audioTrack = audioPublication?.audioTrack?.mediaStreamTrack;
         const id = `${participant.identity}:${screenPublication.trackSid}`;
-        const tracks = audioTrack ? [videoTrack, audioTrack] : [videoTrack];
         activeShareIds.add(id);
+        if (remoteAudioTrack && isRemoteTrack(remoteAudioTrack)) {
+          activeAudioShareIds.add(id);
+          const existingAudioTrack = this.screenShareAudioTracks.get(id);
+          if (existingAudioTrack && existingAudioTrack !== remoteAudioTrack) {
+            existingAudioTrack.detach();
+          }
+          this.screenShareAudioTracks.set(id, remoteAudioTrack);
+        }
 
         return [
           {
@@ -290,7 +349,9 @@ export class LiveKitVoiceSession {
             participantName: participant.name || participant.identity,
             isLocal: participant === room.localParticipant,
             hasAudio: Boolean(audioTrack),
-            mediaStream: this.getScreenShareStream(id, tracks),
+            audioTrackId: audioPublication?.trackSid ?? null,
+            volume: remoteParticipant?.getVolume(Track.Source.ScreenShareAudio) ?? 1,
+            mediaStream: this.getScreenShareStream(id, [videoTrack]),
           },
         ];
       },
@@ -299,6 +360,21 @@ export class LiveKitVoiceSession {
     for (const id of this.screenShareStreams.keys()) {
       if (!activeShareIds.has(id)) {
         this.screenShareStreams.delete(id);
+      }
+    }
+
+    for (const [id, audioTrack] of this.screenShareAudioTracks) {
+      if (!activeAudioShareIds.has(id)) {
+        const previousScreenShare = this.snapshot.screenShares.find(
+          (screenShare) => screenShare.id === id,
+        );
+        if (previousScreenShare) {
+          room.remoteParticipants
+            .get(previousScreenShare.participantIdentity)
+            ?.setVolume(1, Track.Source.ScreenShareAudio);
+        }
+        audioTrack.detach();
+        this.screenShareAudioTracks.delete(id);
       }
     }
 
@@ -322,6 +398,11 @@ export class LiveKitVoiceSession {
 
   private clearScreenShareStreams(): void {
     this.screenShareStreams.clear();
+  }
+
+  private clearScreenShareAudioTracks(): void {
+    this.screenShareAudioTracks.forEach((audioTrack) => audioTrack.detach());
+    this.screenShareAudioTracks.clear();
   }
 
   private setSnapshot(snapshot: VoiceSessionSnapshot): void {

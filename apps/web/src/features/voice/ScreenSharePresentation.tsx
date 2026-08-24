@@ -7,6 +7,9 @@ import type { ScreenShare } from '@/features/voice/livekit-voice-session';
 type ScreenSharePresentationProps = Readonly<{
   screenShares: readonly ScreenShare[];
   onFocusModeChange: (isFocused: boolean) => void;
+  onVolumeChange: (screenShareId: string, volume: number) => void;
+  onAttachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  onDetachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
   onToggleScreenShare: () => void;
   screenShareActionLabel: string;
   isScreenShareActionDisabled: boolean;
@@ -16,6 +19,9 @@ type ScreenSharePresentationProps = Readonly<{
 export function ScreenSharePresentation({
   screenShares,
   onFocusModeChange,
+  onVolumeChange,
+  onAttachAudio,
+  onDetachAudio,
   onToggleScreenShare,
   screenShareActionLabel,
   isScreenShareActionDisabled,
@@ -52,7 +58,10 @@ export function ScreenSharePresentation({
 
   if (focusedScreenShare) {
     return (
-      <section className="flex min-h-[calc(100svh-10rem)] flex-col" aria-label="Tela em foco">
+      <section
+        className="flex min-h-[calc(100svh-4rem)] flex-col lg:min-h-[calc(100svh-8rem)]"
+        aria-label="Tela em foco"
+      >
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -95,7 +104,13 @@ export function ScreenSharePresentation({
           ref={fullscreenTargetRef}
           className="min-h-0 flex-1 overflow-hidden rounded-lg bg-black"
         >
-          <ScreenShareVideo screenShare={focusedScreenShare} variant="focus" />
+          <ScreenShareVideo
+            screenShare={focusedScreenShare}
+            variant="focus"
+            onVolumeChange={onVolumeChange}
+            onAttachAudio={onAttachAudio}
+            onDetachAudio={onDetachAudio}
+          />
         </div>
       </section>
     );
@@ -105,6 +120,9 @@ export function ScreenSharePresentation({
     <ScreenShareCollection
       screenShares={screenShares}
       onFocus={(screenShareId) => setFocusedScreenShareId(screenShareId)}
+      onVolumeChange={onVolumeChange}
+      onAttachAudio={onAttachAudio}
+      onDetachAudio={onDetachAudio}
     />
   );
 }

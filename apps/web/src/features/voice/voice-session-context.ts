@@ -11,6 +11,9 @@ export type VoiceSessionContextValue = Readonly<{
   leave: () => Promise<void>;
   startScreenShare: () => Promise<void>;
   stopScreenShare: () => Promise<void>;
+  setScreenShareVolume: (screenShareId: string, volume: number) => void;
+  attachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  detachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
 }>;
 
 export const VoiceSessionContext = createContext<VoiceSessionContextValue | null>(null);
