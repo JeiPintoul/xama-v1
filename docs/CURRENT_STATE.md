@@ -1,201 +1,61 @@
 # Xama — Current Project State
 
-Last updated: 2026-08-23
-
-## Purpose
-
-This file is the short operational source of truth for the current state of Xama.
-
-Use it to resume work in a new ChatGPT or Codex session without relying on conversation history. Long-term product and architecture rules still live in `PRODUCT.md`, `UX.md`, `ARCHITECTURE.md`, and `AGENTS.md`.
-
-When the tactical sequence in this file conflicts with the older milestone ordering in `ROADMAP.md`, follow this file and `SCREEN_SHARE_ALPHA.md` until the Screen Share Alpha is completed or this document is updated again.
-
----
+Last updated: 2026-08-24
 
 ## Current Stage
 
-Milestone 2 is functionally complete on branch `milestone-2` and is awaiting final local validation/merge into `main`.
-
-Implemented foundation:
-
-- pnpm workspace;
-- React + TypeScript + Vite;
-- Tailwind and semantic design tokens;
-- responsive desktop/mobile web shell;
-- community rail;
-- resizable community navigation sidebar;
-- route-driven mock communities and channels;
-- Simplified, Modular, and Automatic navigation;
-- user-specific mocked channel favorites;
-- custom application menus/context menus;
-- desktop and mobile navigation behavior;
-- compact default navigation density.
-
-No production backend, authentication, database, realtime chat, or media provider is integrated yet.
-
----
-
-## Immediate Product Priority
-
-The immediate priority is a **publicly deployable Screen Share Alpha**.
-
-The target is deliberately narrower than the original roadmap:
+Active implementation branch:
 
 ```text
-open Xama
-→ identify as a temporary guest
-→ select an existing mock community/voice channel
-→ join the real LiveKit room
-→ share a screen
-→ watch other participants' screen shares
+alpha/screen-share
 ```
 
-The alpha exists to validate the core reason Xama currently matters: simple screen sharing for friend groups.
+The LiveKit media core is working and has been validated in real rooms: realtime presence, multiple simultaneous screen shares, screen-share audio, Grid, Focus, browser fullscreen, independent per-share volume, desktop viewing, and mobile viewing.
 
-Chat, persistent communities, database-backed favorites, full authentication, and advanced moderation are temporarily deferred.
+QSB1.2 makes `Assistir` a real selective media subscription. Remote screen-share publications remain visible while their video and screen-share audio are unsubscribed; watching subscribes only the chosen share, and stopping watching unsubscribes and detaches it. LiveKit uses SDK video attachment with adaptive stream/background video pausing and dynacast.
 
----
+QSB1.3 separates watching from presentation: `Assistir` opens a bounded inline player, Focus is an explicit fixed viewport overlay, browser fullscreen remains separate, and supported remote video can enter native Picture-in-Picture without resubscribing. Available shares use compact rows. Per-share volume is reapplied after resubscription, mute restores each share's last audible level, and the persisted provider-neutral publishing choice targets either 720p30 Balanced or 1080p30 High with simulcast. Focus retains best-effort Screen Wake Lock, and development builds include a compact Xama-styled on-demand diagnostics popover.
 
-## Screen Share Alpha Architecture
+QSB1.4 supports watching any number of active shares together. Each watched remote share is independently subscribed, rendered, controlled, represented in viewer presence, and stopped without affecting the others; local preview can remain alongside remote players. Inline, Focus, fullscreen, PiP, volume/mute, and development diagnostics are per player, while only one player may occupy Xama Focus. All media overlays now auto-hide after inactivity, including DEV controls, and the single speaker control supports hover/focus volume plus 5% mouse-wheel adjustment. Quick Share density and interaction feedback account for effective desktop viewports around 1536×864 without overriding display scaling.
 
-Use:
+The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing development routes. They are not the public beta entry point.
 
-- current React/Vite web application;
-- current mock communities/channels as navigation data;
-- LiveKit Cloud for realtime media;
-- a minimal Supabase Edge Function for secure LiveKit token generation;
-- Cloudflare Pages for the public web deployment;
-- temporary guest identity stored locally in the browser;
-- a shared alpha access code validated only by the server-side token function.
+## Public-Test Path: Quick Share Beta (QSB1)
 
-The LiveKit API secret must never be exposed to the browser.
+```text
+/
+→ Quick Share landing
 
-Detailed scope and acceptance criteria live in `docs/SCREEN_SHARE_ALPHA.md`.
+/r/:code
+→ dedicated Quick Share room
+```
 
----
+Quick Share is the current public-test experience: create a temporary room, share its code/link, then join to watch or publish screens. It has no community/channel shell, authentication, room history, or database-backed rooms.
 
-## Tactical Sequence
+The landing is the single Quick Share entry surface. Joining validates the temporary room and completes the media-session connection before navigating; invalid or expired codes remain inline on the landing. Direct `/r/:code` visits without a matching active session return to `/?room=:code` so the shared code stays prefilled without connecting automatically.
 
-### SS0 — Infrastructure foundation
+The `quick-room` Supabase Edge Function generates an 8-character code from an unambiguous alphabet, maps it to an ephemeral `quick:` LiveKit room, explicitly creates that room, and issues short-lived join/publish/subscribe tokens. Quick Rooms use a 10-minute empty timeout, 60-second departure timeout, and 12-participant limit. LiveKit credentials stay server-side.
 
-- LiveKit Cloud project;
-- Supabase project only for the token Edge Function;
-- secure environment/secrets;
-- frontend media dependencies;
-- token endpoint contract.
+Existing mock-community voice routes and the original access-gated token endpoint remain available only for development. They are intentionally not the Quick Share flow.
 
-### SS1 — Real room connection
+## Safety and Capabilities
 
-- temporary guest identity;
-- join/leave a LiveKit room from an existing voice-channel route;
-- connection state;
-- real participants.
+Quick Share intentionally has no account or shared alpha password for the friend-group beta. Before broad public distribution, add server-side rate limiting, Cloudflare Turnstile (or equivalent), and further room-creation controls if needed.
 
-### SS2 — Real screen sharing
+Mobile web viewers can join, watch, use Grid/Focus/fullscreen, and control supported remote-share volume. Publishing is capability-dependent and commonly unsupported on mobile browsers, so the UI explains this instead of attempting a failing capture. Desktop Chromium remains the primary publishing target.
 
-- start/stop local screen share;
-- render remote screen-share tracks;
-- handle browser cancellation/permission failures;
-- screen-share audio where the browser supports it.
+Remote-share volume remains 0–100%. The future optional >100% direction remains a Web Audio gain stage with limiting/compression, never a publisher-side volume change.
 
-### SS3 — Multiple simultaneous shares
+## Deployment Contract
 
-- support multiple published screen-share tracks in the same room;
-- responsive stream grid;
-- click/tap a stream to focus it;
-- return from focus to grid.
+Deploy `supabase/functions/quick-room` with existing server-side `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`, then configure:
 
-### SS4 — Public preview deployment
+```text
+VITE_QUICK_ROOM_ENDPOINT=https://your-project.supabase.co/functions/v1/quick-room
+```
 
-- Cloudflare Pages deployment;
-- HTTPS;
-- production environment configuration;
-- deployed Supabase token function;
-- real multi-device test.
-
-### SS5 — Minimum alpha hardening
-
-- disconnected/reconnecting states;
-- participant/share cleanup;
-- permission-denied feedback;
-- unsupported-browser guidance;
-- desktop/mobile viewing sanity checks;
-- focused security review of the temporary token endpoint.
-
----
-
-## Alpha Non-Goals
-
-Do not block the first usable alpha on:
-
-- text chat;
-- Supabase Auth;
-- persistent profiles;
-- database-backed communities/channels;
-- persistent favorites;
-- full invite system;
-- role engine;
-- advanced moderation;
-- notifications;
-- cameras;
-- plugin/customization engine;
-- dashboard/Activity;
-- native applications.
-
-Microphone voice is a stretch goal only if it does not delay usable screen sharing.
-
----
-
-## Current UX Decisions
-
-- Favorites remain visible in their normal channel lists and also appear in the Favorites shortcut area.
-- The small blue star is the approved current favorite indicator.
-- In Modular mode, the Favorites module is hidden when there are no favorites.
-- Favorite state and notification state are separate concepts. Favoriting must never implicitly alter notification behavior.
-- Future notification controls should allow community defaults, per-channel overrides, and exceptions.
-- Community-level actions belong in the menu opened from the community header; navigation mode selection currently lives there.
-- The default interface density should be relatively compact, while future customization may expose density/layout preferences.
-- Product-facing dropdowns and context menus should use Xama-owned UI rather than generic browser-native presentation when practical.
-
----
-
-## Alpha Browser Target
-
-Primary publishing target:
-
-**desktop Chromium browsers (Chrome/Edge).**
-
-Screen-share audio capabilities depend on browser/OS capture support. Mobile web remains important to Xama, but mobile screen-share publishing must not block the initial desktop alpha. Mobile viewing/joining should remain usable where technically supported.
-
----
-
-## Engineering Workflow
-
-Use Codex selectively for high-complexity implementation and debugging.
-
-Prefer ChatGPT + GitHub for:
-
-- planning;
-- documentation;
-- review;
-- small focused patches;
-- minor UI changes;
-- CI/configuration.
-
-For Codex tasks, use a fresh session for the Screen Share Alpha and keep prompts small by referencing:
-
-- `AGENTS.md`;
-- `docs/CURRENT_STATE.md`;
-- `docs/SCREEN_SHARE_ALPHA.md`;
-- only relevant sections of `docs/ARCHITECTURE.md` and `docs/UX.md`.
-
-Do not make Codex re-read all historical documentation unless necessary.
-
----
+Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel host allowance is handled outside source control with `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`.
 
 ## Next Action
 
-1. Validate and merge `milestone-2` into `main`.
-2. Create a fresh `alpha/screen-share` branch from the updated `main`.
-3. Complete the manual LiveKit/Supabase setup described in `SCREEN_SHARE_ALPHA.md`.
-4. Delegate SS0/SS1 implementation using a fresh Codex session.
+Validate QSB1.4 over HTTPS with three participants and two simultaneous publishers: watch both shares, set independent volume/mute, Focus and unfocus one, then stop one while the other remains subscribed and playing. Recheck 2560×1440, 1920×1080, approximately 1536×864, and 390×844.

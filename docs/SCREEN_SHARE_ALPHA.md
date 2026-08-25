@@ -1,5 +1,47 @@
 # Xama — Screen Share Alpha
 
+## QSB1 — Quick Share Beta
+
+Quick Share is the current public-test path:
+
+```text
+/
+→ create a temporary room or enter a code
+
+/r/:code
+→ dedicated sharing/viewing surface
+```
+
+The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing routes for continued development. Quick Share deliberately does not show that shell.
+
+Quick Rooms use server-generated 8-character codes from an unambiguous alphabet, mapped to `quick:` LiveKit room names. The `quick-room` Supabase Edge Function explicitly creates rooms with a 10-minute empty timeout, 60-second departure timeout, and 12-person limit, then returns a short-lived join/publish/subscribe token. Rooms are not persisted in the database; an expired code safely fails to join.
+
+The Quick Share landing owns both creation and validated joining. Room routes render only an already connecting/connected matching session; direct links return to the landing with the room code prefilled, and failed or expired joins stay there with an inline error.
+
+QSB1 is account-free for the friend-group beta. Before broad public distribution, add server-side rate limiting, Cloudflare Turnstile or equivalent, and further creation controls if needed.
+
+Mobile web joining and viewing remain supported where browsers allow it. Publishing is capability-dependent and commonly unsupported on mobile web, so Quick Share explains that viewers can still watch rather than attempting capture. Remote share volume remains independently controlled from 0–100%; the future >100% Web Audio gain/limiting direction remains unchanged.
+
+Focused and browser-fullscreen viewing uses temporary, activity-revealed controls over the media rather than permanent bars. Screen-share capture requests `restrictOwnAudio` where browser capability reporting supports it, while falling back cleanly elsewhere.
+
+### QSB1.2 — Quality and efficiency
+
+Remote screen shares are represented from their publications before media subscription. `Assistir` subscribes only the selected screen-share video and optional screen-share audio; stopping watching unsubscribes and detaches both while viewer-presence signaling remains independent of frame delivery.
+
+The LiveKit adapter owns provider tracks and SDK element attachment. Rooms use `adaptiveStream` with background video pausing and `dynacast`; publishing targets 1920×1080 at 30 FPS with the official LiveKit 1080p30 screen-share encoding, simulcast, and official 360p15/720p15 lower layers. Focus requests best-effort Screen Wake Lock, and development builds expose compact on-demand track diagnostics without production UI.
+
+### QSB1.3 — Viewing controls and publishing quality
+
+Watching and presentation are separate product states: available shares are compact unsubscribed rows, `Assistir` opens one bounded inline player, Focus explicitly moves that same player into a fixed viewport overlay, and native fullscreen or Picture-in-Picture do not alter subscription state. Leaving Focus returns inline; only the stop/X action unsubscribes video and audio.
+
+Remote volume remains provider-neutral and per share. Stored volume is reapplied whenever screen-share audio is resubscribed, while mute restores that share's last non-zero level. The persisted publishing preference uses `balanced` or `high` product intent, translated inside LiveKit to the official 720p30 or 1080p30 screen-share presets with simulcast and suitable lower layers. The final capture-source picker remains browser-owned.
+
+### QSB1.4 — Multi-watch and finalized media controls
+
+A participant may watch multiple local or remote screen shares simultaneously. Watched shares form a responsive inline grid, and each remote share independently owns its selective video/audio subscription, volume, mute, PiP, diagnostics, and stop action. Focus and fullscreen select one player for presentation without unsubscribing the other watched players. Viewer presence represents the full watched set per participant and removes individual shares or disconnected viewers independently.
+
+Every player uses one activity-driven media overlay in inline, Focus, and fullscreen modes. The overlay includes development-only diagnostics, stays visible while controls or popovers are active, and otherwise fades after inactivity. Desktop speaker hover/focus exposes the slider and mouse wheel changes that share by 5%; coarse-pointer layouts expose the slider directly without adding a second settings button. Responsive density follows the effective CSS viewport, including approximately 1536×864 at common Windows display scaling.
+
 ## Objective
 
 Ship the smallest publicly usable version of Xama that validates the product's core value:
@@ -245,6 +287,10 @@ Chrome / Edge on desktop
 Provide concise guidance when useful, for example that the user may need to enable audio in the browser's share picker.
 
 Do not make unsupported screen-share audio block video sharing.
+
+Viewer volume is local to each participant and screen share. Normal alpha volume ranges from 0% to
+100%. A future optional boost above 100% should use a Web Audio gain/limiting stage, never alter the
+publisher's audio.
 
 ---
 
