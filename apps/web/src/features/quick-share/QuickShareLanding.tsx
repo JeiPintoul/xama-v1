@@ -110,7 +110,7 @@ export function QuickShareLanding() {
                 type="button"
                 disabled={isCreating}
                 onClick={() => void createRoom()}
-                className="mt-3 min-h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-3 min-h-11 w-full cursor-pointer rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCreating ? 'Criando sala…' : 'Criar uma sala'}
               </button>
@@ -132,7 +132,7 @@ export function QuickShareLanding() {
                 />
                 <button
                   type="submit"
-                  className="min-h-11 w-full rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                  className="min-h-11 w-full cursor-pointer rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none transition hover:border-primary/50 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
                 >
                   Entrar
                 </button>

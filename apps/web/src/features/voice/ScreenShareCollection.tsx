@@ -26,7 +26,7 @@ function getViewerLabel(screenShare: ScreenShare): string {
 export function ScreenShareCollection({ screenShares, onWatch }: ScreenShareCollectionProps) {
   return (
     <section
-      className="rounded-xl border border-border bg-surface/70 p-3.5 sm:p-4"
+      className="rounded-xl border border-border bg-surface/70 p-3 sm:p-3.5"
       aria-label="Telas compartilhadas"
     >
       <div className="flex items-baseline justify-between gap-4">
@@ -45,11 +45,11 @@ export function ScreenShareCollection({ screenShares, onWatch }: ScreenShareColl
           Quando alguém compartilhar uma tela, ela aparecerá aqui.
         </p>
       ) : (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
           {screenShares.map((screenShare) => (
             <article
               key={screenShare.id}
-              className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-background/80 p-2.5"
+              className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border bg-background/80 p-2.5"
             >
               <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
                 <span className="size-5">
@@ -74,7 +74,7 @@ export function ScreenShareCollection({ screenShares, onWatch }: ScreenShareColl
               <button
                 type="button"
                 onClick={() => onWatch(screenShare.id)}
-                className="min-h-11 shrink-0 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-11 shrink-0 cursor-pointer rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={`Assistir tela de ${screenShare.participantName}`}
               >
                 Assistir

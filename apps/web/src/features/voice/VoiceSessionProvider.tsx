@@ -51,7 +51,10 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
     (screenShareId: string) => session.watchScreenShare(screenShareId),
     [session],
   );
-  const stopWatchingScreenShare = useCallback(() => session.stopWatchingScreenShare(), [session]);
+  const stopWatchingScreenShare = useCallback(
+    (screenShareId: string) => session.stopWatchingScreenShare(screenShareId),
+    [session],
+  );
   const getScreenShareDiagnostics = useCallback(
     (screenShareId: string) => session.getScreenShareDiagnostics(screenShareId),
     [session],

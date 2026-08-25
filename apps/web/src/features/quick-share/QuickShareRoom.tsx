@@ -60,7 +60,7 @@ function QualityPicker({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="min-h-11 rounded-md border border-border px-3 text-xs font-semibold text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-h-11 cursor-pointer rounded-md border border-border px-3 text-xs font-semibold text-text-secondary outline-none transition hover:border-primary/50 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={`Qualidade alvo: ${selectedOption?.label}`}
         aria-expanded={isOpen}
       >
@@ -77,7 +77,7 @@ function QualityPicker({
                 onChange(option.value);
                 setIsOpen(false);
               }}
-              className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2.5 text-left outline-none hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-md px-2.5 text-left outline-none transition hover:bg-surface-raised active:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring ${
                 option.value === quality ? 'bg-primary/10 text-primary' : 'text-foreground'
               }`}
             >
@@ -213,7 +213,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
             <button
               type="submit"
               disabled={isConnecting}
-              className="min-h-11 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 w-full cursor-pointer rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isConnecting ? 'Entrando…' : 'Entrar na sala'}
             </button>
@@ -233,7 +233,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
   return (
     <main className="min-h-svh bg-background text-foreground">
       {!isFocusMode ? (
-        <header className="border-b border-border bg-surface px-4 py-2.5 sm:px-5">
+        <header className="border-b border-border bg-surface px-4 py-2 sm:px-5">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2.5">
             <div className="flex min-w-0 items-center gap-2.5">
               <img src="/brand/xama-symbol.png" alt="Xama" className="h-6 w-auto" />
@@ -252,14 +252,14 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
               <button
                 type="button"
                 onClick={() => void copy(formatQuickRoomCode(code), 'Código copiado.')}
-                className="min-h-11 rounded-md border border-border px-3 text-xs font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-11 cursor-pointer rounded-md border border-border px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-primary/40 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Copiar código
               </button>
               <button
                 type="button"
                 onClick={() => void copy(roomLink, 'Link copiado.')}
-                className="min-h-11 rounded-md border border-border px-3 text-xs font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                className="min-h-11 cursor-pointer rounded-md border border-border px-3 text-xs font-medium text-text-secondary outline-none transition hover:border-primary/40 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Copiar link
               </button>
@@ -267,10 +267,10 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
           </div>
         </header>
       ) : null}
-      <div className={isFocusMode ? '' : 'mx-auto max-w-5xl px-4 py-4 sm:px-5 sm:py-5'}>
+      <div className={isFocusMode ? '' : 'mx-auto max-w-5xl px-4 py-3.5 sm:px-5 sm:py-4'}>
         {!isFocusMode ? (
           <section
-            className="mb-4 rounded-xl border border-border bg-surface/70 p-3.5 sm:p-4"
+            className="mb-3 rounded-xl border border-border bg-surface/70 p-3 sm:p-3.5"
             aria-label="Participantes da sala"
           >
             <div className="flex items-baseline justify-between gap-4">
@@ -283,11 +283,11 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
                 {snapshot.participants.length === 1 ? 'pessoa' : 'pessoas'}
               </span>
             </div>
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="mt-2.5 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {snapshot.participants.map((participant) => (
                 <li
                   key={participant.identity}
-                  className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-background/70 px-2.5 py-2"
+                  className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border/70 bg-background/70 px-2.5 py-1.5"
                 >
                   <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/15 text-[0.6875rem] font-semibold text-primary">
                     {participant.name.slice(0, 1).toUpperCase()}
@@ -319,7 +319,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
           getDiagnostics={getScreenShareDiagnostics}
         />
         {!isFocusMode ? (
-          <section className="mt-4 flex flex-wrap items-center gap-2.5">
+          <section className="mt-3 flex flex-wrap items-center gap-2.5">
             {canPublish ? (
               <>
                 <button
@@ -330,7 +330,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
                       ? stopScreenShare()
                       : startScreenShare(quality))
                   }
-                  className="min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  className="min-h-11 cursor-pointer rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {screenShareActionLabel}
                 </button>
@@ -347,7 +347,7 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
             <button
               type="button"
               onClick={() => void exitRoom()}
-              className="min-h-11 rounded-md border border-border px-4 text-sm font-medium text-text-secondary outline-none hover:bg-surface-raised hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-11 cursor-pointer rounded-md border border-border px-4 text-sm font-medium text-text-secondary outline-none transition hover:border-primary/40 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring"
             >
               Sair
             </button>

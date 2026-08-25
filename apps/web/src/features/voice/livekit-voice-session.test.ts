@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   applyRemoteScreenShareVolume,
+  getViewerPresenceScreenShareIds,
   setScreenSharePublicationSubscribed,
 } from '@/features/voice/livekit-voice-session';
 
@@ -26,6 +27,43 @@ describe('LiveKit screen share subscription intent', () => {
 
     expect(videoSetSubscribed).toHaveBeenLastCalledWith(false);
     expect(audioSetSubscribed).toHaveBeenLastCalledWith(false);
+  });
+
+  it('unsubscribes one watched share without changing another share subscription', () => {
+    const firstSetSubscribed = vi.fn();
+    const secondSetSubscribed = vi.fn();
+
+    setScreenSharePublicationSubscribed(
+      { isDesired: false, setSubscribed: firstSetSubscribed },
+      true,
+    );
+    setScreenSharePublicationSubscribed(
+      { isDesired: false, setSubscribed: secondSetSubscribed },
+      true,
+    );
+    setScreenSharePublicationSubscribed(
+      { isDesired: true, setSubscribed: firstSetSubscribed },
+      false,
+    );
+
+    expect(firstSetSubscribed).toHaveBeenLastCalledWith(false);
+    expect(secondSetSubscribed).toHaveBeenCalledTimes(1);
+    expect(secondSetSubscribed).toHaveBeenLastCalledWith(true);
+  });
+});
+
+describe('screen share viewer presence messages', () => {
+  it('reads current multi-watch and legacy single-watch selections', () => {
+    expect(
+      getViewerPresenceScreenShareIds({
+        type: 'selection',
+        screenShareIds: ['share-a', 'share-b'],
+      }),
+    ).toEqual(['share-a', 'share-b']);
+    expect(
+      getViewerPresenceScreenShareIds({ type: 'selection', screenShareId: 'share-a' }),
+    ).toEqual(['share-a']);
+    expect(getViewerPresenceScreenShareIds({ type: 'selection', screenShareId: null })).toEqual([]);
   });
 });
 

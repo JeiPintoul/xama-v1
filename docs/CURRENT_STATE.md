@@ -16,6 +16,8 @@ QSB1.2 makes `Assistir` a real selective media subscription. Remote screen-share
 
 QSB1.3 separates watching from presentation: `Assistir` opens a bounded inline player, Focus is an explicit fixed viewport overlay, browser fullscreen remains separate, and supported remote video can enter native Picture-in-Picture without resubscribing. Available shares use compact rows. Per-share volume is reapplied after resubscription, mute restores each share's last audible level, and the persisted provider-neutral publishing choice targets either 720p30 Balanced or 1080p30 High with simulcast. Focus retains best-effort Screen Wake Lock, and development builds include a compact Xama-styled on-demand diagnostics popover.
 
+QSB1.4 supports watching any number of active shares together. Each watched remote share is independently subscribed, rendered, controlled, represented in viewer presence, and stopped without affecting the others; local preview can remain alongside remote players. Inline, Focus, fullscreen, PiP, volume/mute, and development diagnostics are per player, while only one player may occupy Xama Focus. All media overlays now auto-hide after inactivity, including DEV controls, and the single speaker control supports hover/focus volume plus 5% mouse-wheel adjustment. Quick Share density and interaction feedback account for effective desktop viewports around 1536×864 without overriding display scaling.
+
 The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing development routes. They are not the public beta entry point.
 
 ## Public-Test Path: Quick Share Beta (QSB1)
@@ -54,4 +56,4 @@ Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel h
 
 ## Next Action
 
-Validate QSB1.3 over HTTPS with two browsers/devices: confirm selective subscription from the inline viewer, fixed Focus/fullscreen transitions, PiP where supported, volume restoration after resubscription, per-share mute, and both 720p30/1080p30 publishing targets.
+Validate QSB1.4 over HTTPS with three participants and two simultaneous publishers: watch both shares, set independent volume/mute, Focus and unfocus one, then stop one while the other remains subscribed and playing. Recheck 2560×1440, 1920×1080, approximately 1536×864, and 390×844.

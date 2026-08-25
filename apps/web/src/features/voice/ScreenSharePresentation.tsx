@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode, RefObject, WheelEvent } from 'react';
 
 import type { ScreenShare, ScreenShareMediaDiagnostics } from '@/features/voice/media-session';
 import { ScreenShareCollection } from '@/features/voice/ScreenShareCollection';
@@ -9,7 +10,7 @@ type ScreenSharePresentationProps = Readonly<{
   screenShares: readonly ScreenShare[];
   onFocusModeChange: (isFocused: boolean) => void;
   onWatch: (screenShareId: string) => void;
-  onStopWatching: () => void;
+  onStopWatching: (screenShareId: string) => void;
   onVolumeChange: (screenShareId: string, volume: number) => void;
   onToggleMute: (screenShareId: string) => void;
   onAttachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
@@ -29,6 +30,9 @@ type PictureInPictureVideo = HTMLVideoElement & {
   requestPictureInPicture?: () => Promise<unknown>;
 };
 
+const mediaButtonClass =
+  'grid size-11 cursor-pointer place-items-center rounded-full bg-black/50 text-white outline-none backdrop-blur-sm transition duration-150 hover:bg-white/20 active:scale-95 active:bg-white/25 focus-visible:ring-2 focus-visible:ring-white';
+
 function FullscreenIcon({ exit = false }: Readonly<{ exit?: boolean }>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -44,7 +48,7 @@ function FullscreenIcon({ exit = false }: Readonly<{ exit?: boolean }>) {
 function FocusIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M8 3H3v5m13-5h5v5M8 21H3v-5m18 0v5h-5" />
+      <path d="M9 9 4 4m0 0v4m0-4h4m7 5 5-5m0 0v4m0-4h-4M9 15l-5 5m0 0v-4m0 4h4m7-5 5 5m0 0v-4m0 4h-4" />
     </svg>
   );
 }
@@ -74,14 +78,6 @@ function VolumeIcon({ muted }: Readonly<{ muted: boolean }>) {
   );
 }
 
-function AdjustIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-      <path d="M4 7h10m4 0h2M4 17h2m4 0h10M14 4v6M6 14v6" />
-    </svg>
-  );
-}
-
 function PictureInPictureIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -91,18 +87,91 @@ function PictureInPictureIcon() {
   );
 }
 
+function MediaControlButton({
+  label,
+  tooltip,
+  onClick,
+  children,
+  danger = false,
+}: Readonly<{
+  label: string;
+  tooltip: string;
+  onClick: () => void;
+  children: ReactNode;
+  danger?: boolean;
+}>) {
+  return (
+    <span className="group relative">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${mediaButtonClass} ${danger ? 'hover:bg-danger/85 active:bg-danger' : ''}`}
+        aria-label={label}
+      >
+        <span className="size-5">{children}</span>
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 bottom-[calc(100%+0.5rem)] z-30 w-max max-w-44 translate-y-1 rounded-md border border-white/10 bg-black/90 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100 [@media(pointer:coarse)]:hidden"
+      >
+        {tooltip}
+      </span>
+    </span>
+  );
+}
+
+function VolumeSlider({
+  id,
+  label,
+  accessibleLabel,
+  volumePercentage,
+  onVolumeChange,
+  className,
+}: Readonly<{
+  id: string;
+  label: string;
+  accessibleLabel: string;
+  volumePercentage: number;
+  onVolumeChange: (volume: number) => void;
+  className?: string;
+}>) {
+  return (
+    <div className={className}>
+      <label htmlFor={id} className="mb-2 flex items-center justify-between text-xs text-white/80">
+        <span>{label}</span>
+        <span>{volumePercentage}%</span>
+      </label>
+      <input
+        id={id}
+        type="range"
+        min="0"
+        max="100"
+        value={volumePercentage}
+        aria-label={accessibleLabel}
+        onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
+        className="w-full cursor-pointer accent-primary"
+      />
+    </div>
+  );
+}
+
 function VolumeControl({
   screenShare,
   onVolumeChange,
   onToggleMute,
+  onOpenChange,
+  onActivity,
 }: Readonly<{
   screenShare: ScreenShare;
   onVolumeChange: (screenShareId: string, volume: number) => void;
   onToggleMute: (screenShareId: string) => void;
+  onOpenChange: (isOpen: boolean) => void;
+  onActivity: () => void;
 }>) {
   const [isOpen, setIsOpen] = useState(false);
   const closeTimeoutRef = useRef<number | null>(null);
   const volumePercentage = Math.round(screenShare.volume * 100);
+  const sliderId = `screen-share-volume-${screenShare.id}`;
 
   function cancelClose() {
     if (closeTimeoutRef.current !== null) {
@@ -111,80 +180,208 @@ function VolumeControl({
     }
   }
 
-  function scheduleClose() {
+  function open() {
     cancelClose();
-    closeTimeoutRef.current = window.setTimeout(() => setIsOpen(false), 200);
+    setIsOpen(true);
+    onOpenChange(true);
+    onActivity();
   }
 
-  useEffect(() => () => cancelClose(), []);
+  function scheduleClose() {
+    cancelClose();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      setIsOpen(false);
+      onOpenChange(false);
+    }, 200);
+  }
+
+  function changeVolume(volume: number) {
+    onActivity();
+    onVolumeChange(screenShare.id, volume);
+  }
+
+  function changeVolumeWithWheel(event: WheelEvent<HTMLDivElement>) {
+    if (event.deltaY === 0) return;
+    event.preventDefault();
+    onActivity();
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextVolume = Math.min(1, Math.max(0, screenShare.volume + direction * 0.05));
+    onVolumeChange(screenShare.id, Math.round(nextVolume * 100) / 100);
+  }
+
+  useEffect(
+    () => () => {
+      cancelClose();
+      onOpenChange(false);
+    },
+    [onOpenChange],
+  );
 
   return (
     <div
-      className="relative flex items-center"
-      onMouseEnter={() => {
-        cancelClose();
-        setIsOpen(true);
-      }}
+      className="group/volume relative flex items-center gap-2"
+      onMouseEnter={open}
       onMouseLeave={scheduleClose}
-      onFocusCapture={() => {
-        cancelClose();
-        setIsOpen(true);
-      }}
+      onFocusCapture={open}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) scheduleClose();
       }}
+      onWheel={changeVolumeWithWheel}
     >
       {isOpen ? (
-        <div className="absolute right-0 bottom-full w-44 rounded-lg border border-white/15 bg-black/85 p-3 shadow-lg backdrop-blur-md">
-          <label
-            htmlFor={`screen-share-volume-${screenShare.id}`}
-            className="mb-2 flex items-center justify-between text-xs text-white/80"
-          >
-            <span>Volume</span>
-            <span>{volumePercentage}%</span>
-          </label>
-          <input
-            id={`screen-share-volume-${screenShare.id}`}
-            type="range"
-            min="0"
-            max="100"
-            value={volumePercentage}
-            onChange={(event) => onVolumeChange(screenShare.id, Number(event.target.value) / 100)}
-            className="w-full accent-primary"
-          />
-        </div>
+        <VolumeSlider
+          id={sliderId}
+          label="Volume"
+          accessibleLabel={`Volume de ${screenShare.participantName}`}
+          volumePercentage={volumePercentage}
+          onVolumeChange={changeVolume}
+          className="absolute right-0 bottom-full w-44 rounded-lg border border-white/15 bg-black/85 p-3 shadow-lg backdrop-blur-md [@media(pointer:coarse)]:hidden"
+        />
       ) : null}
       <button
         type="button"
-        onClick={() => onToggleMute(screenShare.id)}
-        className="grid size-11 place-items-center rounded-l-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-white"
+        onClick={() => {
+          onActivity();
+          onToggleMute(screenShare.id);
+        }}
+        className={mediaButtonClass}
         aria-label={`${volumePercentage === 0 ? 'Ativar' : 'Silenciar'} áudio de ${screenShare.participantName}`}
-        title={volumePercentage === 0 ? 'Ativar áudio' : 'Silenciar áudio'}
       >
         <span className="size-5">
           <VolumeIcon muted={volumePercentage === 0} />
         </span>
       </button>
-      <button
-        type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        className="grid size-11 place-items-center rounded-r-full border-l border-white/10 bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-white"
-        aria-label={`Ajustar volume de ${screenShare.participantName}: ${volumePercentage}%`}
-        aria-expanded={isOpen}
-        title="Ajustar volume"
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 bottom-[calc(100%+0.5rem)] z-20 w-max translate-y-1 rounded-md border border-white/10 bg-black/90 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition group-hover/volume:translate-y-0 group-hover/volume:opacity-100 group-focus-within/volume:translate-y-0 group-focus-within/volume:opacity-100 [@media(pointer:coarse)]:hidden"
       >
-        <span className="size-4">
-          <AdjustIcon />
-        </span>
-      </button>
+        {volumePercentage === 0 ? 'Ativar áudio' : 'Silenciar áudio'}
+      </span>
+      <VolumeSlider
+        id={`${sliderId}-touch`}
+        label="Volume"
+        accessibleLabel={`Volume de ${screenShare.participantName} em tela sensível ao toque`}
+        volumePercentage={volumePercentage}
+        onVolumeChange={changeVolume}
+        className="hidden w-32 rounded-full bg-black/55 px-3 py-2 [@media(pointer:coarse)]:block"
+      />
     </div>
   );
 }
 
-export function ScreenSharePresentation({
-  screenShares,
-  onFocusModeChange,
-  onWatch,
+function MediaDiagnostics({
+  screenShare,
+  videoRef,
+  isOpen,
+  onOpenChange,
+  getDiagnostics,
+}: Readonly<{
+  screenShare: ScreenShare;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  getDiagnostics: (screenShareId: string) => Promise<ScreenShareMediaDiagnostics | null>;
+}>) {
+  const [diagnostics, setDiagnostics] = useState<ScreenShareMediaDiagnostics | null>(null);
+  const [videoDimensions, setVideoDimensions] = useState<Readonly<{
+    width: number;
+    height: number;
+  }> | null>(null);
+  const panelId = `screen-share-diagnostics-${screenShare.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isOpen) return;
+
+    let isActive = true;
+    const updateDiagnostics = async () => {
+      const video = videoRef.current;
+      const nextDiagnostics = await getDiagnostics(screenShare.id).catch(() => null);
+      if (!isActive) return;
+
+      setDiagnostics(nextDiagnostics);
+      setVideoDimensions(
+        video?.videoWidth && video.videoHeight
+          ? { width: video.videoWidth, height: video.videoHeight }
+          : null,
+      );
+    };
+
+    void updateDiagnostics();
+    const interval = window.setInterval(() => void updateDiagnostics(), 1_000);
+    return () => {
+      isActive = false;
+      window.clearInterval(interval);
+    };
+  }, [getDiagnostics, isOpen, screenShare.id, videoRef]);
+
+  if (!import.meta.env.DEV) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!isOpen)}
+        className="min-h-11 cursor-pointer rounded-full border border-white/15 bg-black/50 px-3 font-mono text-[0.6875rem] font-semibold tracking-wide text-white/80 outline-none backdrop-blur-sm transition-colors hover:bg-white/20 active:bg-white/25 focus-visible:ring-2 focus-visible:ring-white"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+      >
+        DEV
+      </button>
+      {isOpen ? (
+        <div
+          id={panelId}
+          className="absolute right-0 bottom-[calc(100%+0.5rem)] w-56 rounded-lg border border-white/15 bg-black/90 p-3 text-[0.6875rem] text-white/80 shadow-xl backdrop-blur-md"
+          aria-label={`Diagnóstico de mídia de ${screenShare.participantName}`}
+        >
+          <p className="mb-2 text-xs font-semibold text-white">Diagnóstico de mídia</p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono">
+            <dt>Origem</dt>
+            <dd>{screenShare.isLocal ? 'local' : 'remota'}</dd>
+            <dt>Estado</dt>
+            <dd>{screenShare.watchState}</dd>
+            <dt>Vídeo</dt>
+            <dd>{videoDimensions ? `${videoDimensions.width}×${videoDimensions.height}` : '—'}</dd>
+            <dt>Bitrate</dt>
+            <dd>{diagnostics?.bitrateKbps ? `${diagnostics.bitrateKbps} kbps` : '—'}</dd>
+            <dt>FPS</dt>
+            <dd>{diagnostics?.framesPerSecond ?? '—'}</dd>
+            <dt>Codec</dt>
+            <dd>{diagnostics?.codec ?? '—'}</dd>
+            <dt>Stream</dt>
+            <dd>{diagnostics?.streamState ?? '—'}</dd>
+            <dt>Áudio</dt>
+            <dd>{screenShare.hasAudio ? screenShare.audioState : 'não'}</dd>
+            <dt>Provider</dt>
+            <dd>{diagnostics?.provider ?? '—'}</dd>
+          </dl>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type ScreenSharePlayerProps = Readonly<{
+  screenShare: ScreenShare;
+  isFocused: boolean;
+  isOnlyWatchedShare: boolean;
+  onFocus: (screenShareId: string) => void;
+  onLeaveFocus: () => void;
+  onStopWatching: (screenShareId: string) => void;
+  onVolumeChange: (screenShareId: string, volume: number) => void;
+  onToggleMute: (screenShareId: string) => void;
+  onAttachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
+  onDetachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
+  onAttachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  onDetachAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  getDiagnostics: (screenShareId: string) => Promise<ScreenShareMediaDiagnostics | null>;
+}>;
+
+function ScreenSharePlayer({
+  screenShare,
+  isFocused,
+  isOnlyWatchedShare,
+  onFocus,
+  onLeaveFocus,
   onStopWatching,
   onVolumeChange,
   onToggleMute,
@@ -193,42 +390,35 @@ export function ScreenSharePresentation({
   onAttachAudio,
   onDetachAudio,
   getDiagnostics,
-}: ScreenSharePresentationProps) {
+}: ScreenSharePlayerProps) {
   const [presentationError, setPresentationError] = useState<string | null>(null);
-  const [isFocused, setIsFocused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPictureInPicture, setIsPictureInPicture] = useState(false);
   const [areControlsVisible, setAreControlsVisible] = useState(true);
-  const [isControlActive, setIsControlActive] = useState(false);
+  const [isControlFocused, setIsControlFocused] = useState(false);
+  const [isControlPressed, setIsControlPressed] = useState(false);
+  const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const fullscreenTargetRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const activePictureInPictureVideoRef = useRef<HTMLVideoElement | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
-  const watchedScreenShare = screenShares.find(
-    (screenShare) => screenShare.watchState !== 'available',
-  );
-  const availableScreenShares = screenShares.filter(
-    (screenShare) => screenShare.id !== watchedScreenShare?.id,
-  );
   const supportsFullscreen =
     typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.requestFullscreen === 'function';
   const pictureInPictureDocument =
     typeof document === 'undefined' ? null : (document as PictureInPictureDocument);
   const supportsPictureInPicture = Boolean(
-    watchedScreenShare &&
-    !watchedScreenShare.isLocal &&
+    !screenShare.isLocal &&
     pictureInPictureDocument?.pictureInPictureEnabled &&
     typeof HTMLVideoElement !== 'undefined' &&
     typeof (HTMLVideoElement.prototype as PictureInPictureVideo).requestPictureInPicture ===
       'function',
   );
+  const areControlsPinned =
+    isControlFocused || isControlPressed || isVolumeOpen || isDiagnosticsOpen;
 
-  useScreenWakeLock(Boolean(watchedScreenShare && isFocused));
-
-  useEffect(() => {
-    onFocusModeChange(Boolean(watchedScreenShare && isFocused));
-  }, [isFocused, onFocusModeChange, watchedScreenShare]);
+  useScreenWakeLock(isFocused);
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -254,7 +444,7 @@ export function ScreenSharePresentation({
       video.removeEventListener('enterpictureinpicture', onEnterPictureInPicture);
       video.removeEventListener('leavepictureinpicture', onLeavePictureInPicture);
     };
-  }, [watchedScreenShare?.id, watchedScreenShare?.watchState]);
+  }, [screenShare.id, screenShare.watchState]);
 
   useEffect(
     () => () => {
@@ -268,17 +458,21 @@ export function ScreenSharePresentation({
       }
       activePictureInPictureVideoRef.current = null;
     },
-    [pictureInPictureDocument, watchedScreenShare?.id],
+    [pictureInPictureDocument, screenShare.id],
   );
 
   useEffect(() => {
-    if (!watchedScreenShare || !isFocused || isControlActive || !areControlsVisible) return;
+    if (!areControlsVisible || areControlsPinned) return;
 
     controlsTimeoutRef.current = window.setTimeout(() => setAreControlsVisible(false), 2800);
     return () => {
       if (controlsTimeoutRef.current !== null) window.clearTimeout(controlsTimeoutRef.current);
     };
-  }, [areControlsVisible, isControlActive, isFocused, watchedScreenShare]);
+  }, [areControlsPinned, areControlsVisible]);
+
+  function revealControls() {
+    setAreControlsVisible(true);
+  }
 
   async function exitPictureInPicture() {
     const activeVideo = activePictureInPictureVideoRef.current;
@@ -325,7 +519,7 @@ export function ScreenSharePresentation({
         await document.exitFullscreen();
       } else {
         await target.requestFullscreen();
-        setIsFocused(true);
+        onFocus(screenShare.id);
       }
       setPresentationError(null);
     } catch {
@@ -337,8 +531,8 @@ export function ScreenSharePresentation({
     if (document.fullscreenElement === fullscreenTargetRef.current) {
       await document.exitFullscreen().catch(() => undefined);
     }
-    setIsFocused(false);
-    setAreControlsVisible(true);
+    onLeaveFocus();
+    revealControls();
   }
 
   async function stopWatching() {
@@ -346,173 +540,229 @@ export function ScreenSharePresentation({
       await document.exitFullscreen().catch(() => undefined);
     }
     await exitPictureInPicture();
-    setIsFocused(false);
-    onStopWatching();
+    onStopWatching(screenShare.id);
   }
 
-  function startWatching(screenShareId: string) {
-    setIsFocused(false);
-    setIsPictureInPicture(false);
-    setAreControlsVisible(true);
-    onWatch(screenShareId);
-  }
-
-  if (!watchedScreenShare) {
-    return <ScreenShareCollection screenShares={screenShares} onWatch={startWatching} />;
-  }
-
-  const canControlAudio = !watchedScreenShare.isLocal && watchedScreenShare.hasAudio;
-  const shouldAutoHideControls = isFocused || isFullscreen;
+  const canControlAudio = !screenShare.isLocal && screenShare.hasAudio;
 
   return (
-    <div className="space-y-4">
-      <section
-        className={
-          isFocused
-            ? 'fixed inset-0 z-50 flex h-svh w-screen items-center justify-center overflow-hidden bg-black'
-            : 'rounded-xl border border-border bg-surface/70 p-2.5 sm:p-3'
-        }
-        aria-label={isFocused ? 'Tela em foco' : 'Assistindo tela'}
+    <section
+      className={
+        isFocused
+          ? 'fixed inset-0 z-50 flex h-svh w-screen items-center justify-center overflow-hidden bg-black'
+          : `w-full rounded-xl border border-border bg-surface/70 p-2 sm:p-2.5 ${
+              isOnlyWatchedShare ? 'mx-auto max-w-4xl' : ''
+            }`
+      }
+      aria-label={
+        isFocused
+          ? `Tela de ${screenShare.participantName} em foco`
+          : `Assistindo ${screenShare.participantName}`
+      }
+    >
+      <div
+        ref={fullscreenTargetRef}
+        data-testid={`screen-share-stage-${screenShare.id}`}
+        className={`relative flex overflow-hidden bg-black ${
+          isFocused ? 'h-full w-full' : 'aspect-video max-h-[52svh] w-full rounded-lg'
+        } ${isFullscreen && !areControlsVisible ? 'cursor-none' : ''}`}
+        onPointerMove={revealControls}
+        onTouchStart={revealControls}
+        onKeyDown={revealControls}
       >
-        <div
-          ref={fullscreenTargetRef}
-          data-testid="screen-share-stage"
-          className={`relative flex overflow-hidden bg-black ${
-            isFocused
-              ? 'h-full w-full'
-              : 'mx-auto aspect-video max-h-[56svh] w-full max-w-4xl rounded-lg'
-          } ${isFullscreen && !areControlsVisible ? 'cursor-none' : ''}`}
-          onPointerMove={() => setAreControlsVisible(true)}
-          onTouchStart={() => setAreControlsVisible(true)}
-          onKeyDown={() => setAreControlsVisible(true)}
-        >
-          {watchedScreenShare.watchState === 'ready' ? (
-            <ScreenShareVideo
-              screenShare={watchedScreenShare}
-              videoRef={videoRef}
-              onAttachVideo={onAttachVideo}
-              onDetachVideo={onDetachVideo}
-              onAttachAudio={onAttachAudio}
-              onDetachAudio={onDetachAudio}
-              getDiagnostics={getDiagnostics}
-            />
-          ) : (
-            <div
-              className="flex h-full min-h-52 w-full items-center justify-center bg-black px-6 text-center text-sm text-white/70"
-              role="status"
-            >
-              Assinando transmissão…
-            </div>
-          )}
+        {screenShare.watchState === 'ready' ? (
+          <ScreenShareVideo
+            screenShare={screenShare}
+            videoRef={videoRef}
+            onAttachVideo={onAttachVideo}
+            onDetachVideo={onDetachVideo}
+            onAttachAudio={onAttachAudio}
+            onDetachAudio={onDetachAudio}
+          />
+        ) : (
           <div
-            className={`absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-3 pb-3 pt-14 transition-opacity duration-200 sm:px-4 sm:pb-4 ${
-              !shouldAutoHideControls || areControlsVisible
-                ? 'opacity-100'
-                : 'pointer-events-none opacity-0'
-            }`}
-            onPointerDown={() => setIsControlActive(true)}
-            onPointerUp={() => setIsControlActive(false)}
-            onPointerCancel={() => setIsControlActive(false)}
-            onFocusCapture={() => setIsControlActive(true)}
-            onBlurCapture={() => setIsControlActive(false)}
+            className="flex h-full min-h-44 w-full items-center justify-center bg-black px-6 text-center text-sm text-white/70"
+            role="status"
           >
-            <div className="min-w-24 flex-1 pb-1">
-              <p className="truncate text-sm font-semibold text-white">
-                {watchedScreenShare.participantName}
-              </p>
-              <p className="mt-0.5 text-xs text-white/65">
-                {watchedScreenShare.isLocal ? 'Sua tela' : 'Transmitindo agora'}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {canControlAudio ? (
-                <VolumeControl
-                  screenShare={watchedScreenShare}
-                  onVolumeChange={onVolumeChange}
-                  onToggleMute={onToggleMute}
-                />
-              ) : null}
-              {supportsPictureInPicture ? (
-                <button
-                  type="button"
-                  onClick={() => void togglePictureInPicture()}
-                  className="grid size-11 place-items-center rounded-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
-                  aria-label={
-                    isPictureInPicture ? 'Fechar Picture-in-Picture' : 'Abrir Picture-in-Picture'
-                  }
-                  title="Picture-in-Picture"
-                >
-                  <span className="size-5">
-                    <PictureInPictureIcon />
-                  </span>
-                </button>
-              ) : null}
-              {!isFocused ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFocused(true);
-                    setAreControlsVisible(true);
-                  }}
-                  className="grid size-11 place-items-center rounded-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
-                  aria-label="Entrar no modo Foco"
-                  title="Foco"
-                >
-                  <span className="size-5">
-                    <FocusIcon />
-                  </span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => void leaveFocus()}
-                  className="grid size-11 place-items-center rounded-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
-                  aria-label="Voltar para visualização inline"
-                  title="Voltar"
-                >
-                  <span className="size-5">
-                    <BackIcon />
-                  </span>
-                </button>
-              )}
-              {supportsFullscreen ? (
-                <button
-                  type="button"
-                  onClick={() => void toggleFullscreen()}
-                  className="grid size-11 place-items-center rounded-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-black/65 focus-visible:ring-2 focus-visible:ring-white"
-                  aria-label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
-                  title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
-                >
-                  <span className="size-5">
-                    <FullscreenIcon exit={isFullscreen} />
-                  </span>
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => void stopWatching()}
-                className="grid size-11 place-items-center rounded-full bg-black/45 text-white outline-none backdrop-blur-sm hover:bg-danger/85 focus-visible:ring-2 focus-visible:ring-white"
-                aria-label={`Parar de assistir a tela de ${watchedScreenShare.participantName}`}
-                title="Parar de assistir"
-              >
-                <span className="size-5">
-                  <CloseIcon />
-                </span>
-              </button>
-            </div>
+            Assinando transmissão de {screenShare.participantName}…
           </div>
-          {presentationError ? (
-            <p
-              role="alert"
-              className="absolute inset-x-4 top-4 rounded-md bg-black/75 px-3 py-2 text-sm text-white"
-            >
-              {presentationError}
+        )}
+        <div
+          data-testid={`screen-share-controls-${screenShare.id}`}
+          className={`absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-2.5 bg-gradient-to-t from-black/90 via-black/45 to-transparent px-3 pb-3 pt-12 transition-opacity duration-200 sm:px-3.5 sm:pb-3.5 ${
+            areControlsVisible ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+          onPointerDown={() => setIsControlPressed(true)}
+          onPointerUp={() => setIsControlPressed(false)}
+          onPointerCancel={() => setIsControlPressed(false)}
+          onFocusCapture={() => setIsControlFocused(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setIsControlFocused(false);
+            }
+          }}
+        >
+          <div className="min-w-24 flex-1 pb-1">
+            <p className="truncate text-sm font-semibold text-white">
+              {screenShare.participantName}
             </p>
-          ) : null}
+            <p className="mt-0.5 text-xs text-white/65">
+              {screenShare.isLocal ? 'Sua tela' : 'Transmitindo agora'}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {canControlAudio ? (
+              <VolumeControl
+                screenShare={screenShare}
+                onVolumeChange={onVolumeChange}
+                onToggleMute={onToggleMute}
+                onOpenChange={setIsVolumeOpen}
+                onActivity={revealControls}
+              />
+            ) : null}
+            {import.meta.env.DEV ? (
+              <MediaDiagnostics
+                screenShare={screenShare}
+                videoRef={videoRef}
+                isOpen={isDiagnosticsOpen}
+                onOpenChange={(isOpen) => {
+                  setIsDiagnosticsOpen(isOpen);
+                  if (isOpen) revealControls();
+                }}
+                getDiagnostics={getDiagnostics}
+              />
+            ) : null}
+            {supportsPictureInPicture ? (
+              <MediaControlButton
+                label={
+                  isPictureInPicture ? 'Fechar Picture-in-Picture' : 'Abrir Picture-in-Picture'
+                }
+                tooltip={isPictureInPicture ? 'Fechar Picture-in-Picture' : 'Picture-in-Picture'}
+                onClick={() => void togglePictureInPicture()}
+              >
+                <PictureInPictureIcon />
+              </MediaControlButton>
+            ) : null}
+            {!isFocused ? (
+              <MediaControlButton
+                label={`Focar transmissão de ${screenShare.participantName}`}
+                tooltip="Focar transmissão"
+                onClick={() => {
+                  onFocus(screenShare.id);
+                  revealControls();
+                }}
+              >
+                <FocusIcon />
+              </MediaControlButton>
+            ) : (
+              <MediaControlButton
+                label="Voltar para visualização inline"
+                tooltip="Voltar à grade"
+                onClick={() => void leaveFocus()}
+              >
+                <BackIcon />
+              </MediaControlButton>
+            )}
+            {supportsFullscreen ? (
+              <MediaControlButton
+                label={isFullscreen ? 'Sair da tela cheia' : 'Entrar em tela cheia'}
+                tooltip={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+                onClick={() => void toggleFullscreen()}
+              >
+                <FullscreenIcon exit={isFullscreen} />
+              </MediaControlButton>
+            ) : null}
+            <MediaControlButton
+              label={`Parar de assistir a tela de ${screenShare.participantName}`}
+              tooltip="Parar de assistir"
+              onClick={() => void stopWatching()}
+              danger
+            >
+              <CloseIcon />
+            </MediaControlButton>
+          </div>
         </div>
-      </section>
-      {!isFocused && availableScreenShares.length > 0 ? (
-        <ScreenShareCollection screenShares={availableScreenShares} onWatch={startWatching} />
+        {presentationError ? (
+          <p
+            role="alert"
+            className="absolute inset-x-4 top-4 rounded-md bg-black/75 px-3 py-2 text-sm text-white"
+          >
+            {presentationError}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+export function ScreenSharePresentation({
+  screenShares,
+  onFocusModeChange,
+  onWatch,
+  onStopWatching,
+  onVolumeChange,
+  onToggleMute,
+  onAttachVideo,
+  onDetachVideo,
+  onAttachAudio,
+  onDetachAudio,
+  getDiagnostics,
+}: ScreenSharePresentationProps) {
+  const [focusedScreenShareId, setFocusedScreenShareId] = useState<string | null>(null);
+  const watchedScreenShares = screenShares.filter(
+    (screenShare) => screenShare.watchState !== 'available',
+  );
+  const availableScreenShares = screenShares.filter(
+    (screenShare) => screenShare.watchState === 'available',
+  );
+  const activeFocusedScreenShareId = watchedScreenShares.some(
+    (screenShare) => screenShare.id === focusedScreenShareId,
+  )
+    ? focusedScreenShareId
+    : null;
+
+  useEffect(() => {
+    onFocusModeChange(Boolean(activeFocusedScreenShareId));
+  }, [activeFocusedScreenShareId, onFocusModeChange]);
+
+  function stopWatching(screenShareId: string) {
+    if (activeFocusedScreenShareId === screenShareId) setFocusedScreenShareId(null);
+    onStopWatching(screenShareId);
+  }
+
+  if (watchedScreenShares.length === 0) {
+    return <ScreenShareCollection screenShares={screenShares} onWatch={onWatch} />;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div
+        className={`grid gap-2.5 ${
+          watchedScreenShares.length === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'
+        }`}
+        aria-label="Telas sendo assistidas"
+      >
+        {watchedScreenShares.map((screenShare) => (
+          <ScreenSharePlayer
+            key={screenShare.id}
+            screenShare={screenShare}
+            isFocused={activeFocusedScreenShareId === screenShare.id}
+            isOnlyWatchedShare={watchedScreenShares.length === 1}
+            onFocus={setFocusedScreenShareId}
+            onLeaveFocus={() => setFocusedScreenShareId(null)}
+            onStopWatching={stopWatching}
+            onVolumeChange={onVolumeChange}
+            onToggleMute={onToggleMute}
+            onAttachVideo={onAttachVideo}
+            onDetachVideo={onDetachVideo}
+            onAttachAudio={onAttachAudio}
+            onDetachAudio={onDetachAudio}
+            getDiagnostics={getDiagnostics}
+          />
+        ))}
+      </div>
+      {availableScreenShares.length > 0 ? (
+        <ScreenShareCollection screenShares={availableScreenShares} onWatch={onWatch} />
       ) : null}
     </div>
   );

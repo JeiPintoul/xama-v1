@@ -34,6 +34,12 @@ Watching and presentation are separate product states: available shares are comp
 
 Remote volume remains provider-neutral and per share. Stored volume is reapplied whenever screen-share audio is resubscribed, while mute restores that share's last non-zero level. The persisted publishing preference uses `balanced` or `high` product intent, translated inside LiveKit to the official 720p30 or 1080p30 screen-share presets with simulcast and suitable lower layers. The final capture-source picker remains browser-owned.
 
+### QSB1.4 — Multi-watch and finalized media controls
+
+A participant may watch multiple local or remote screen shares simultaneously. Watched shares form a responsive inline grid, and each remote share independently owns its selective video/audio subscription, volume, mute, PiP, diagnostics, and stop action. Focus and fullscreen select one player for presentation without unsubscribing the other watched players. Viewer presence represents the full watched set per participant and removes individual shares or disconnected viewers independently.
+
+Every player uses one activity-driven media overlay in inline, Focus, and fullscreen modes. The overlay includes development-only diagnostics, stays visible while controls or popovers are active, and otherwise fades after inactivity. Desktop speaker hover/focus exposes the slider and mouse wheel changes that share by 5%; coarse-pointer layouts expose the slider directly without adding a second settings button. Responsive density follows the effective CSS viewport, including approximately 1536×864 at common Windows display scaling.
+
 ## Objective
 
 Ship the smallest publicly usable version of Xama that validates the product's core value:
