@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { setScreenSharePublicationSubscribed } from '@/features/voice/livekit-voice-session';
+import {
+  applyRemoteScreenShareVolume,
+  setScreenSharePublicationSubscribed,
+} from '@/features/voice/livekit-voice-session';
 
 describe('LiveKit screen share subscription intent', () => {
   it('subscribes and unsubscribes video and audio publications without duplicate requests', () => {
@@ -23,5 +26,15 @@ describe('LiveKit screen share subscription intent', () => {
 
     expect(videoSetSubscribed).toHaveBeenLastCalledWith(false);
     expect(audioSetSubscribed).toHaveBeenLastCalledWith(false);
+  });
+});
+
+describe('remote screen share volume', () => {
+  it.each([0, 0.8])('reapplies a stored volume of %s after audio resubscription', (volume) => {
+    const setVolume = vi.fn();
+
+    applyRemoteScreenShareVolume({ setVolume }, volume);
+
+    expect(setVolume).toHaveBeenCalledWith(volume, expect.anything());
   });
 });

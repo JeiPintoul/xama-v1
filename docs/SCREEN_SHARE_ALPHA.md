@@ -24,9 +24,15 @@ Focused and browser-fullscreen viewing uses temporary, activity-revealed control
 
 ### QSB1.2 — Quality and efficiency
 
-Remote screen shares are represented from their publications before media subscription. `Assistir` subscribes only the selected screen-share video and optional screen-share audio; leaving Focus unsubscribes and detaches both while viewer-presence signaling remains independent of frame delivery.
+Remote screen shares are represented from their publications before media subscription. `Assistir` subscribes only the selected screen-share video and optional screen-share audio; stopping watching unsubscribes and detaches both while viewer-presence signaling remains independent of frame delivery.
 
 The LiveKit adapter owns provider tracks and SDK element attachment. Rooms use `adaptiveStream` with background video pausing and `dynacast`; publishing targets 1920×1080 at 30 FPS with the official LiveKit 1080p30 screen-share encoding, simulcast, and official 360p15/720p15 lower layers. Focus requests best-effort Screen Wake Lock, and development builds expose compact on-demand track diagnostics without production UI.
+
+### QSB1.3 — Viewing controls and publishing quality
+
+Watching and presentation are separate product states: available shares are compact unsubscribed rows, `Assistir` opens one bounded inline player, Focus explicitly moves that same player into a fixed viewport overlay, and native fullscreen or Picture-in-Picture do not alter subscription state. Leaving Focus returns inline; only the stop/X action unsubscribes video and audio.
+
+Remote volume remains provider-neutral and per share. Stored volume is reapplied whenever screen-share audio is resubscribed, while mute restores that share's last non-zero level. The persisted publishing preference uses `balanced` or `high` product intent, translated inside LiveKit to the official 720p30 or 1080p30 screen-share presets with simulcast and suitable lower layers. The final capture-source picker remains browser-owned.
 
 ## Objective
 

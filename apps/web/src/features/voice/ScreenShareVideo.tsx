@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 
 import type { ScreenShare, ScreenShareMediaDiagnostics } from '@/features/voice/media-session';
 
 type ScreenShareVideoProps = Readonly<{
   screenShare: ScreenShare;
+  videoRef: RefObject<HTMLVideoElement | null>;
   onAttachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
   onDetachVideo: (screenShareId: string, element: HTMLVideoElement) => void;
   onAttachAudio?: (screenShareId: string, element: HTMLAudioElement) => void;
@@ -13,13 +15,13 @@ type ScreenShareVideoProps = Readonly<{
 
 export function ScreenShareVideo({
   screenShare,
+  videoRef,
   onAttachVideo,
   onDetachVideo,
   onAttachAudio,
   onDetachAudio,
   getDiagnostics,
 }: ScreenShareVideoProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [requiresAudioActivation, setRequiresAudioActivation] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
@@ -31,9 +33,7 @@ export function ScreenShareVideo({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
-
-    if (screenShare.watchState !== 'ready') return;
+    if (!video || screenShare.watchState !== 'ready') return;
 
     video.muted = screenShare.isLocal;
     onAttachVideo(screenShare.id, video);
@@ -43,7 +43,14 @@ export function ScreenShareVideo({
       onDetachVideo(screenShare.id, video);
       video.srcObject = null;
     };
-  }, [onAttachVideo, onDetachVideo, screenShare.id, screenShare.isLocal, screenShare.watchState]);
+  }, [
+    onAttachVideo,
+    onDetachVideo,
+    screenShare.id,
+    screenShare.isLocal,
+    screenShare.watchState,
+    videoRef,
+  ]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -79,17 +86,13 @@ export function ScreenShareVideo({
   ]);
 
   useEffect(() => {
-    if (!import.meta.env.DEV || !isDiagnosticsOpen) {
-      return;
-    }
+    if (!import.meta.env.DEV || !isDiagnosticsOpen) return;
 
     let isActive = true;
     const updateDiagnostics = async () => {
       const video = videoRef.current;
       const nextDiagnostics = await getDiagnostics(screenShare.id).catch(() => null);
-      if (!isActive) {
-        return;
-      }
+      if (!isActive) return;
 
       setDiagnostics(nextDiagnostics);
       setVideoDimensions(
@@ -105,7 +108,7 @@ export function ScreenShareVideo({
       isActive = false;
       window.clearInterval(interval);
     };
-  }, [getDiagnostics, isDiagnosticsOpen, screenShare.id]);
+  }, [getDiagnostics, isDiagnosticsOpen, screenShare.id, videoRef]);
 
   function activateAudio() {
     const audio = audioRef.current;
@@ -137,36 +140,48 @@ export function ScreenShareVideo({
         </button>
       ) : null}
       {import.meta.env.DEV ? (
-        <details
-          className="absolute top-4 right-4 z-10 max-w-64 rounded-md bg-black/70 px-3 py-2 text-xs text-white/85 backdrop-blur-sm"
-          onToggle={(event) => setIsDiagnosticsOpen(event.currentTarget.open)}
-        >
-          <summary className="cursor-pointer select-none font-medium">
-            DiagnÃ³stico de mÃ­dia
-          </summary>
-          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-            <dt>Origem</dt>
-            <dd>{screenShare.isLocal ? 'local' : 'remota'}</dd>
-            <dt>Estado</dt>
-            <dd>{screenShare.watchState}</dd>
-            <dt>VÃ­deo</dt>
-            <dd>
-              {videoDimensions ? `${videoDimensions.width}Ã—${videoDimensions.height}` : 'â€”'}
-            </dd>
-            <dt>Bitrate</dt>
-            <dd>{diagnostics?.bitrateKbps ? `${diagnostics.bitrateKbps} kbps` : 'â€”'}</dd>
-            <dt>FPS</dt>
-            <dd>{diagnostics?.framesPerSecond ?? 'â€”'}</dd>
-            <dt>Codec</dt>
-            <dd>{diagnostics?.codec ?? 'â€”'}</dd>
-            <dt>Stream</dt>
-            <dd>{diagnostics?.streamState ?? 'â€”'}</dd>
-            <dt>Ãudio</dt>
-            <dd>{screenShare.hasAudio ? screenShare.audioState : 'nÃ£o'}</dd>
-            <dt>Provider</dt>
-            <dd>{diagnostics?.provider ?? 'â€”'}</dd>
-          </dl>
-        </details>
+        <div className="absolute top-3 right-3 z-20">
+          <button
+            type="button"
+            onClick={() => setIsDiagnosticsOpen((isOpen) => !isOpen)}
+            className="rounded-md border border-white/15 bg-black/65 px-2 py-1 font-mono text-[0.6875rem] font-semibold tracking-wide text-white/80 outline-none backdrop-blur-sm hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-white"
+            aria-expanded={isDiagnosticsOpen}
+            aria-controls="screen-share-diagnostics"
+          >
+            DEV
+          </button>
+          {isDiagnosticsOpen ? (
+            <div
+              id="screen-share-diagnostics"
+              className="absolute top-8 right-0 w-56 rounded-lg border border-white/15 bg-black/85 p-3 text-[0.6875rem] text-white/80 shadow-xl backdrop-blur-md"
+              aria-label="Diagnóstico de mídia"
+            >
+              <p className="mb-2 text-xs font-semibold text-white">Diagnóstico de mídia</p>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono">
+                <dt>Origem</dt>
+                <dd>{screenShare.isLocal ? 'local' : 'remota'}</dd>
+                <dt>Estado</dt>
+                <dd>{screenShare.watchState}</dd>
+                <dt>Vídeo</dt>
+                <dd>
+                  {videoDimensions ? `${videoDimensions.width}×${videoDimensions.height}` : '—'}
+                </dd>
+                <dt>Bitrate</dt>
+                <dd>{diagnostics?.bitrateKbps ? `${diagnostics.bitrateKbps} kbps` : '—'}</dd>
+                <dt>FPS</dt>
+                <dd>{diagnostics?.framesPerSecond ?? '—'}</dd>
+                <dt>Codec</dt>
+                <dd>{diagnostics?.codec ?? '—'}</dd>
+                <dt>Stream</dt>
+                <dd>{diagnostics?.streamState ?? '—'}</dd>
+                <dt>Áudio</dt>
+                <dd>{screenShare.hasAudio ? screenShare.audioState : 'não'}</dd>
+                <dt>Provider</dt>
+                <dd>{diagnostics?.provider ?? '—'}</dd>
+              </dl>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

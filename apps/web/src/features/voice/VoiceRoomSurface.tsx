@@ -40,6 +40,7 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
     startScreenShare,
     stopScreenShare,
     setScreenShareVolume,
+    toggleScreenShareMute,
     attachScreenShareVideo,
     detachScreenShareVideo,
     attachScreenShareAudio,
@@ -151,6 +152,7 @@ export function VoiceRoomSurface({ community, channel }: VoiceRoomSurfaceProps) 
           onWatch={watchScreenShare}
           onStopWatching={stopWatchingScreenShare}
           onVolumeChange={setScreenShareVolume}
+          onToggleMute={toggleScreenShareMute}
           onAttachVideo={attachScreenShareVideo}
           onDetachVideo={detachScreenShareVideo}
           onAttachAudio={attachScreenShareAudio}

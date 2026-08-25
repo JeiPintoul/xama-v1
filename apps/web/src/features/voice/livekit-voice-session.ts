@@ -16,20 +16,45 @@ import type {
   JoinVoiceRoomRequest,
   ScreenShare,
   ScreenShareMediaDiagnostics,
+  ScreenShareQuality,
   VoiceConnectionState,
   VoiceParticipant,
   VoiceSessionSnapshot,
 } from '@/features/voice/media-session';
+import { getScreenShareMuteVolume } from '@/features/voice/media-session';
 
 const viewerPresenceTopic = 'xama.screen-share-viewer';
 
-const screenSharePublishOptions = {
-  simulcast: true,
-  screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
-  screenShareSimulcastLayers: [ScreenSharePresets.h360fps15, ScreenSharePresets.h720fps15],
-} satisfies TrackPublishOptions;
+function getScreenSharePublishOptions(quality: ScreenShareQuality): TrackPublishOptions {
+  if (quality === 'balanced') {
+    return {
+      simulcast: true,
+      screenShareEncoding: ScreenSharePresets.h720fps30.encoding,
+      screenShareSimulcastLayers: [ScreenSharePresets.h360fps15],
+    };
+  }
+
+  return {
+    simulcast: true,
+    screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
+    screenShareSimulcastLayers: [ScreenSharePresets.h360fps15, ScreenSharePresets.h720fps15],
+  };
+}
+
+const defaultScreenSharePublishOptions = getScreenSharePublishOptions('high');
 
 type SnapshotListener = () => void;
+
+type ScreenShareVolumeTarget = Readonly<{
+  setVolume: (volume: number, source: Track.Source.ScreenShareAudio) => void;
+}>;
+
+export function applyRemoteScreenShareVolume(
+  target: ScreenShareVolumeTarget,
+  volume: number,
+): void {
+  target.setVolume(volume, Track.Source.ScreenShareAudio);
+}
 
 const initialSnapshot: VoiceSessionSnapshot = {
   roomName: null,
@@ -86,6 +111,7 @@ export class LiveKitVoiceSession {
   private readonly screenShareVideoTracks = new Map<string, LocalVideoTrack | RemoteVideoTrack>();
   private readonly screenShareAudioTracks = new Map<string, RemoteAudioTrack>();
   private readonly screenShareVolumes = new Map<string, number>();
+  private readonly screenShareLastAudibleVolumes = new Map<string, number>();
   private readonly screenShareViewerSelections = new Map<string, string>();
   private removeRoomListeners: (() => void) | null = null;
 
@@ -114,7 +140,7 @@ export class LiveKitVoiceSession {
       const room = new Room({
         adaptiveStream: { pauseVideoInBackground: true },
         dynacast: true,
-        publishDefaults: screenSharePublishOptions,
+        publishDefaults: defaultScreenSharePublishOptions,
       });
       this.room = room;
       this.listenToRoom(room);
@@ -178,9 +204,23 @@ export class LiveKitVoiceSession {
     }
 
     const normalizedVolume = Math.min(1, Math.max(0, volume));
-    remoteParticipant.setVolume(normalizedVolume, Track.Source.ScreenShareAudio);
+    applyRemoteScreenShareVolume(remoteParticipant, normalizedVolume);
     this.screenShareVolumes.set(screenShareId, normalizedVolume);
+    if (normalizedVolume > 0) {
+      this.screenShareLastAudibleVolumes.set(screenShareId, normalizedVolume);
+    }
     this.publishRoomState(room);
+  }
+
+  toggleScreenShareMute(screenShareId: string): void {
+    const currentVolume = this.screenShareVolumes.get(screenShareId) ?? 1;
+    this.setScreenShareVolume(
+      screenShareId,
+      getScreenShareMuteVolume(
+        currentVolume,
+        this.screenShareLastAudibleVolumes.get(screenShareId),
+      ),
+    );
   }
 
   watchScreenShare(screenShareId: string): void {
@@ -241,6 +281,7 @@ export class LiveKitVoiceSession {
   }
 
   attachScreenShareAudio(screenShareId: string, element: HTMLAudioElement): void {
+    this.applyStoredScreenShareVolume(screenShareId);
     this.screenShareAudioTracks.get(screenShareId)?.attach(element);
   }
 
@@ -272,7 +313,7 @@ export class LiveKitVoiceSession {
     };
   }
 
-  async startScreenShare(): Promise<void> {
+  async startScreenShare(quality: ScreenShareQuality = 'high'): Promise<void> {
     const room = this.room;
     if (!room || room.state !== ConnectionState.Connected) {
       return;
@@ -298,10 +339,13 @@ export class LiveKitVoiceSession {
         true,
         {
           audio: true,
-          resolution: ScreenSharePresets.h1080fps30.resolution,
+          resolution:
+            quality === 'balanced'
+              ? ScreenSharePresets.h720fps30.resolution
+              : ScreenSharePresets.h1080fps30.resolution,
           ...(supportsOwnAudioRestriction ? { restrictOwnAudio: true } : {}),
         },
-        screenSharePublishOptions,
+        getScreenSharePublishOptions(quality),
       );
       this.publishRoomState(room, { screenShareOperation: 'idle', screenShareError: null });
     } catch {
@@ -481,6 +525,7 @@ export class LiveKitVoiceSession {
       if (isWatched && remoteAudioTrack && isRemoteTrack(remoteAudioTrack)) {
         activeAudioTrackIds.add(id);
         this.setScreenShareAudioTrack(id, remoteAudioTrack);
+        this.applyStoredScreenShareVolume(id, participant.identity);
       }
 
       return [
@@ -515,6 +560,7 @@ export class LiveKitVoiceSession {
     for (const id of this.screenShareVolumes.keys()) {
       if (!activeShareIds.has(id)) {
         this.screenShareVolumes.delete(id);
+        this.screenShareLastAudibleVolumes.delete(id);
       }
     }
 
@@ -545,6 +591,22 @@ export class LiveKitVoiceSession {
       previousTrack.detach();
     }
     this.screenShareAudioTracks.set(id, audioTrack);
+  }
+
+  private applyStoredScreenShareVolume(screenShareId: string, participantIdentity?: string): void {
+    const room = this.room;
+    if (!room) return;
+
+    const identity =
+      participantIdentity ??
+      this.snapshot.screenShares.find((screenShare) => screenShare.id === screenShareId)
+        ?.participantIdentity;
+    if (!identity) return;
+
+    const participant = room.remoteParticipants.get(identity);
+    if (participant) {
+      applyRemoteScreenShareVolume(participant, this.screenShareVolumes.get(screenShareId) ?? 1);
+    }
   }
 
   private detachScreenShareMedia(screenShareId: string): void {
@@ -684,6 +746,7 @@ export class LiveKitVoiceSession {
 
   private clearScreenSharePresence(): void {
     this.screenShareVolumes.clear();
+    this.screenShareLastAudibleVolumes.clear();
     this.screenShareViewerSelections.clear();
   }
 

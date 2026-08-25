@@ -12,7 +12,9 @@ alpha/screen-share
 
 The LiveKit media core is working and has been validated in real rooms: realtime presence, multiple simultaneous screen shares, screen-share audio, Grid, Focus, browser fullscreen, independent per-share volume, desktop viewing, and mobile viewing.
 
-QSB1.2 makes `Assistir` a real selective media subscription. Remote screen-share publications remain visible while their video and screen-share audio are unsubscribed; Focus subscribes only the chosen share and stopping Focus unsubscribes and detaches it. LiveKit now uses SDK video attachment with adaptive stream/background video pausing, dynacast, and an explicit 1080p30 simulcast publishing profile with 360p/720p lower layers. Focus also uses best-effort Screen Wake Lock, and development builds include a compact on-demand per-track diagnostics panel.
+QSB1.2 makes `Assistir` a real selective media subscription. Remote screen-share publications remain visible while their video and screen-share audio are unsubscribed; watching subscribes only the chosen share, and stopping watching unsubscribes and detaches it. LiveKit uses SDK video attachment with adaptive stream/background video pausing and dynacast.
+
+QSB1.3 separates watching from presentation: `Assistir` opens a bounded inline player, Focus is an explicit fixed viewport overlay, browser fullscreen remains separate, and supported remote video can enter native Picture-in-Picture without resubscribing. Available shares use compact rows. Per-share volume is reapplied after resubscription, mute restores each share's last audible level, and the persisted provider-neutral publishing choice targets either 720p30 Balanced or 1080p30 High with simulcast. Focus retains best-effort Screen Wake Lock, and development builds include a compact Xama-styled on-demand diagnostics popover.
 
 The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing development routes. They are not the public beta entry point.
 
@@ -52,4 +54,4 @@ Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel h
 
 ## Next Action
 
-Validate QSB1.2 over HTTPS with two browsers/devices: confirm available shares consume no remote screen media before `Assistir`, video/audio subscribe only in Focus, stopping releases delivery, and background/foreground recovery preserves viewing and viewer presence.
+Validate QSB1.3 over HTTPS with two browsers/devices: confirm selective subscription from the inline viewer, fixed Focus/fullscreen transitions, PiP where supported, volume restoration after resubscription, per-share mute, and both 720p30/1080p30 publishing targets.

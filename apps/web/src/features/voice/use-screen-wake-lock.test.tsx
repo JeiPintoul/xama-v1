@@ -5,7 +5,7 @@ import { useScreenWakeLock } from '@/features/voice/use-screen-wake-lock';
 
 function WakeLockHarness({ isWatching }: Readonly<{ isWatching: boolean }>) {
   useScreenWakeLock(isWatching);
-  return <p>{isWatching ? 'assistindo' : 'disponÃ­vel'}</p>;
+  return <p>{isWatching ? 'assistindo' : 'disponível'}</p>;
 }
 
 afterEach(() => {

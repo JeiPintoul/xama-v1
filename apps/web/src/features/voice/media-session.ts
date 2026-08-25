@@ -13,6 +13,15 @@ export type ScreenShareWatchState = 'available' | 'subscribing' | 'ready';
 
 export type ScreenShareAudioState = 'none' | 'available' | 'subscribing' | 'ready';
 
+export type ScreenShareQuality = 'balanced' | 'high';
+
+export function getScreenShareMuteVolume(
+  currentVolume: number,
+  lastAudibleVolume: number | undefined,
+): number {
+  return currentVolume > 0 ? 0 : (lastAudibleVolume ?? 1);
+}
+
 export type ScreenShareMediaDiagnostics = Readonly<{
   provider: string;
   bitrateKbps: number | null;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { PropsWithChildren } from 'react';
 
 import { LiveKitVoiceSession } from '@/features/voice/livekit-voice-session';
-import type { JoinVoiceRoomRequest } from '@/features/voice/media-session';
+import type { JoinVoiceRoomRequest, ScreenShareQuality } from '@/features/voice/media-session';
 import { VoiceSessionContext } from '@/features/voice/voice-session-context';
 
 export function VoiceSessionProvider({ children }: PropsWithChildren) {
@@ -14,10 +14,17 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
   );
   const join = useCallback((request: JoinVoiceRoomRequest) => session.join(request), [session]);
   const leave = useCallback(() => session.leave(), [session]);
-  const startScreenShare = useCallback(() => session.startScreenShare(), [session]);
+  const startScreenShare = useCallback(
+    (quality?: ScreenShareQuality) => session.startScreenShare(quality),
+    [session],
+  );
   const stopScreenShare = useCallback(() => session.stopScreenShare(), [session]);
   const setScreenShareVolume = useCallback(
     (screenShareId: string, volume: number) => session.setScreenShareVolume(screenShareId, volume),
+    [session],
+  );
+  const toggleScreenShareMute = useCallback(
+    (screenShareId: string) => session.toggleScreenShareMute(screenShareId),
     [session],
   );
   const attachScreenShareVideo = useCallback(
@@ -61,6 +68,7 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
         startScreenShare,
         stopScreenShare,
         setScreenShareVolume,
+        toggleScreenShareMute,
         attachScreenShareVideo,
         detachScreenShareVideo,
         attachScreenShareAudio,

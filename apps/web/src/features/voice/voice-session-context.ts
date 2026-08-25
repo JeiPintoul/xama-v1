@@ -3,6 +3,7 @@ import { createContext, useContext } from 'react';
 import type {
   JoinVoiceRoomRequest,
   ScreenShareMediaDiagnostics,
+  ScreenShareQuality,
   VoiceSessionSnapshot,
 } from '@/features/voice/media-session';
 
@@ -10,9 +11,10 @@ export type VoiceSessionContextValue = Readonly<{
   snapshot: VoiceSessionSnapshot;
   join: (request: JoinVoiceRoomRequest) => Promise<void>;
   leave: () => Promise<void>;
-  startScreenShare: () => Promise<void>;
+  startScreenShare: (quality?: ScreenShareQuality) => Promise<void>;
   stopScreenShare: () => Promise<void>;
   setScreenShareVolume: (screenShareId: string, volume: number) => void;
+  toggleScreenShareMute: (screenShareId: string) => void;
   attachScreenShareVideo: (screenShareId: string, element: HTMLVideoElement) => void;
   detachScreenShareVideo: (screenShareId: string, element: HTMLVideoElement) => void;
   attachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
