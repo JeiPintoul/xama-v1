@@ -1,6 +1,6 @@
 # Xama — Current Project State
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 ## Current Stage
 
@@ -19,6 +19,24 @@ QSB1.3 separates watching from presentation: `Assistir` opens a bounded inline p
 QSB1.4 supports watching any number of active shares together. Each watched remote share is independently subscribed, rendered, controlled, represented in viewer presence, and stopped without affecting the others; local preview can remain alongside remote players. Inline, Focus, fullscreen, PiP, volume/mute, and development diagnostics are per player, while only one player may occupy Xama Focus. All media overlays now auto-hide after inactivity, including DEV controls, and the single speaker control supports hover/focus volume plus 5% mouse-wheel adjustment. Quick Share density and interaction feedback account for effective desktop viewports around 1536×864 without overriding display scaling.
 
 The existing full Xama application shell, communities, channels, adaptive navigation, and favorites remain intact on their existing development routes. They are not the public beta entry point.
+
+## Isolated Cloudflare Realtime Spike
+
+The `spike/cloudflare-realtime` branch contains CF0 and CF0.1 infrastructure only. Production on
+`main` remains on the validated LiveKit Quick Share path.
+
+CF0 proves one Cloudflare screen publisher, discovery without automatic receipt, and one explicit
+remote pull through a Worker plus room Durable Object. CF0.1 adds server-generated room-scoped media
+capabilities, a strongly consistent singleton Spend Guard Durable Object, short-lived pull leases,
+soft/hard/emergency budget states, explicit billing-cycle reset, server resource caps, Worker
+control-plane rate limiting, strict origin configuration, an optional server-verified Turnstile
+boundary, and an authenticated backend kill switch.
+
+Spend Guard estimates authorized pull egress pessimistically from lease duration at a configured
+accounting envelope; it is not byte-exact Cloudflare billing and does not claim a provider-native
+hard spending cap. Media still flows directly browser ↔ Cloudflare Realtime SFU. The current
+polling/heartbeat control plane remains temporary; CF0.2 should move room discovery to push events
+and add simulcast/layer efficiency without changing LiveKit production.
 
 ## Public-Test Path: Quick Share Beta (QSB1)
 

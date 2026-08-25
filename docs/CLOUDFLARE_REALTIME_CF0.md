@@ -1,92 +1,192 @@
-# CF0 — Cloudflare Realtime foundation
+# CF0.1 — Cloudflare Realtime security and Spend Guard
 
-CF0 is an isolated infrastructure spike on `spike/cloudflare-realtime`. It does not replace the
-working LiveKit Quick Share implementation and does not provide feature parity.
+CF0 remains an isolated infrastructure spike on `spike/cloudflare-realtime`. The working LiveKit
+Quick Share implementation is unchanged. CF0.1 hardens only the Cloudflare control plane; it does
+not add CF1 feature parity or expose the production Realtime App.
 
-## Boundaries
+## Boundaries and threat model
 
-`packages/media-core` contains only provider- and platform-neutral concepts: participant and
-screen-share state, requested screen-share quality, watch intent, provider identifiers, provider
-availability, a small room-level selection result, and a minimal performance signal. It contains no
-React, DOM, browser WebRTC, LiveKit, Worker, Durable Object, or Cloudflare API types.
+Anonymous browsers, request bodies, participant IDs, Cloudflare Session IDs, Track IDs, room IDs,
+and screen-share IDs are untrusted. Knowing any of those identifiers grants no authority. The
+Realtime App Secret, Spend Guard admin secret, and optional Turnstile secret remain Worker-only and
+must never use a `VITE_*` variable.
 
-Browser capture, `RTCPeerConnection`, media-element attachment, and provider adapters remain in
-`apps/web`. Cloudflare Session/Track request models remain in the Cloudflare web adapter and Worker
-gateway. `apps/realtime` owns the deployable Worker, Durable Object coordinator, routing decision,
-Cloudflare credentials, and Realtime SFU HTTPS calls.
+On join, the RoomCoordinator generates the participant ID and a 256-bit opaque Xama media
+capability. Only its SHA-256 digest is stored. The stored authority is bound to the room,
+participant, Cloudflare Session, expiry, and allowed operations. Every state, heartbeat, publish,
+stop, subscribe, unsubscribe, renegotiate, and leave request requires that capability as a bearer
+credential. Heartbeats extend its short lifetime; leave, stale cleanup, empty-room deletion, and
+participant removal revoke it naturally.
 
-## CF0 flow
+This is anonymous room capability authorization, not account identity. Supabase Auth, moderation,
+and persistent rooms remain outside CF0.1.
 
-The development surface is available at `/cf0` or becomes the root surface when
-`VITE_MEDIA_PROVIDER=cloudflare`.
+## Control plane versus media plane
 
-1. A browser joins an ephemeral room through the Worker.
-2. The room Durable Object selects and pins the provider, creates one Cloudflare Realtime Session
-   per participant, and stores only the minimum participant/track/subscription state.
-3. A publisher captures one screen-video track, creates a browser offer, and asks the Worker to push
-   the track through `tracks/new`.
-4. Other browsers poll the neutral room registry and can see the published share without receiving
-   its media.
-5. `Assistir` explicitly asks the Worker to pull that one remote track. The browser answers the SFU
-   offer through `renegotiate` and only then attaches received media.
-6. Stopping watch calls `tracks/close` for the pull. Stopping publication closes the publisher track,
-   removes it from discovery, and closes registered pulls.
-
-The App Secret is read only by `apps/realtime`. It is never returned by the Worker and must never use
-a `VITE_*` name.
-
-## Provider routing
-
-Provider selection is a room-level server decision. A selected room stays pinned for its lifetime;
-health changes do not trigger cross-provider migration.
-
-For a new room in `automatic` mode, the initial policy is deliberately small:
-
-- eligible, healthy LiveKit is preferred;
-- disabled, degraded, quota-exhausted, or budget-excluded LiveKit may fall back to Cloudflare;
-- if neither provider is eligible, room creation fails clearly.
-
-CF0 does not collect quota or budget data. The routing types reserve explicit exclusion reasons so a
-later trusted backend signal can supply them without moving the decision into React. The
-`VITE_MEDIA_PROVIDER` setting is only a development/test override; `automatic` remains a backend
-policy concept.
-
-## Performance and future P2P
-
-P2P is not implemented. A future P2P candidate must consider topology and performance, not only
-infrastructure cost. Relevant signals may include viewer count, required outbound bitrate, uplink
-headroom, packet loss/RTT, encoder or CPU limits, dropped frames, and hardware-encoding availability.
-
-Unknown or constrained device capacity must bias selection toward an SFU. Browser WebRTC statistics
-may later provide runtime quality, CPU, and bandwidth evidence. Native desktop/mobile clients may
-later provide richer hardware and encoder telemetry. No large hardware model is justified in CF0.
-
-## Native-client split
-
-- Web retains browser capture, browser WebRTC, PiP, and fullscreen.
-- A future Desktop client may use native screen/game capture, native WebRTC bindings, and hardware
-  encoder integration while sharing Xama provider-routing and protocol concepts.
-- A future Mobile client may use Android MediaProjection, iOS ReplayKit (or equivalents), and native
-  WebRTC while sharing the same backend/provider concepts.
-
-`media-core` intentionally has no browser assumption so these clients do not inherit DOM contracts.
-
-## CF1 gaps
-
-CF0 deliberately leaves authentication/authorization, rate limiting, durable product persistence,
-moderation, screen audio, sophisticated reconnect/resume, push-based room events, production TURN
-policy, multi-track parity, and quota/budget collection for later work. Participant cleanup uses a
-heartbeat plus a short stale timeout; room state is discarded after the empty-room lifetime.
-
-## Local configuration
-
-Copy `apps/realtime/.dev.vars.example` to `.dev.vars`, set the Realtime SFU App ID and App Secret,
-then run `pnpm --filter @xama/realtime dev`. Configure the web app with:
+Authorization, rate limits, resource caps, provider routing, Spend Guard admission, and pull-lease
+checks run only on Worker/Durable Object control requests. Media is not proxied or inspected:
 
 ```text
-VITE_MEDIA_PROVIDER=cloudflare
-VITE_REALTIME_ENDPOINT=http://localhost:8787
+browser ↔ Cloudflare Realtime SFU
 ```
 
-Open the same room in two browser profiles. Publish in A, verify B sees an available share without a
-received track, select `Assistir`, verify playback, then stop watching and stop publication.
+The Worker never receives frame-by-frame RTP bytes, so these controls do not add per-frame latency.
+The Cloudflare App Secret is used only by the server gateway for Session/Track HTTPS API calls.
+
+## Server-owned provider routing
+
+Provider selection remains a room-level server decision and existing rooms stay pinned. The browser
+`providerMode` is ignored by default. `ALLOW_CLIENT_PROVIDER_OVERRIDE=true` enables it only for an
+explicit development test such as `/cf0`; production-like deployments must keep it false.
+
+In automatic mode, healthy/enabled LiveKit remains preferred. Cloudflare is excluded from new-room
+selection when disabled, degraded, soft-budget-excluded, hard-stopped, or emergency-stopped. A
+pinned Cloudflare room does not migrate, although hard/emergency admission can deny new Sessions or
+pulls inside it.
+
+## Spend Guard
+
+`SpendGuard` is one SQLite-backed Durable Object per environment/deployment, addressed by the
+constant name `environment`. Its transactional, strongly consistent storage owns:
+
+- enabled and emergency-stop state;
+- soft- and hard-budget thresholds;
+- the explicit billing-cycle identity;
+- conservative estimated egress for that cycle;
+- active remote-pull leases and the global active-pull count.
+
+Every `pullTrack()` first acquires a Spend Guard lease. The default lease is 40 seconds. The existing
+10-second participant heartbeat renews active leases; no separate high-frequency renewal request
+was added. The 15-second RoomCoordinator alarm checks every lease, closes expired or revoked
+provider pulls, removes them from room state, and retries failed `tracks/close` operations from
+durable pending-closure state.
+
+The default accounting envelope is 12,000,000 bits/second for every authorized remote video pull.
+That value is intentionally above expected 1080p30 delivery and is configured with
+`CLOUDFLARE_ACCOUNTING_BITS_PER_SECOND_PER_PULL`. It does not configure encoder or stream quality.
+Estimated bytes accrue from elapsed server-authorized lease time; browser counters and submitted
+usage values are never trusted.
+
+Spend Guard is a pessimistic financial circuit breaker, not Cloudflare's authoritative bill. It
+cannot be byte exact because the Worker is not in the media packet path.
+
+### Limit behavior
+
+- Soft limit: Cloudflare is excluded for new automatic rooms. Existing valid Cloudflare room pulls
+  may continue below the hard limit.
+- Hard limit: new Cloudflare Sessions and pulls are denied, renewals fail, and active pulls close on
+  the next heartbeat/alarm enforcement pass.
+- Emergency stop: Cloudflare becomes immediately ineligible, new operations are denied, leases are
+  revoked, and active pulls close on the next enforcement pass (normally within about 15 seconds;
+  persisted closure retries continue after transient provider failures).
+
+Cloudflare does not provide a native hard spending cap for this application. No code deletes the
+Realtime App or automatically raises a local budget.
+
+## Budgets, reserve, and billing cycle
+
+The checked-in development defaults use a 5 GiB soft limit and 8 GiB hard limit. A reasonable
+development envelope is 5–10 GB. For the initial private production alpha, use a deliberately
+conservative hard budget around 600 GB (for example, soft near 550 GB and hard at 600 GB) after
+creating a separate production Worker configuration.
+
+Cloudflare's current documentation describes an account-level 1,000 GB free tier shared by Realtime
+SFU and TURN. It is not a per-App allowance or a product guarantee. The unused capacity is an
+intentional reserve for estimate error, delayed billing data, development usage, TURN, protocol
+overhead, abuse, and future calibration.
+
+Accounting never resets on the first day of a calendar month. The deployment supplies an explicit
+billing-cycle ID/start/end. Changing that configuration does not silently reset stored usage, and
+raising configured thresholds does not automatically raise the active cycle thresholds. An admin
+must explicitly start/reset a cycle, with no active pull leases, before the new thresholds take
+effect.
+
+## Manual administration
+
+The Worker exposes no React admin UI. These backend-only endpoints require
+`Authorization: Bearer <REALTIME_ADMIN_SECRET>`, compared using fixed-length SHA-256 digests:
+
+```text
+GET  /admin/spend-guard
+POST /admin/spend-guard/emergency-stop  { "enabled": true | false }
+POST /admin/spend-guard/enabled         { "enabled": true | false }
+POST /admin/spend-guard/cycle           { "cycleId", "startedAt", "endsAt"? }
+```
+
+The admin secret must be independently generated, high entropy, Worker-only, and never logged.
+Cycle reset fails while pull leases are active; use emergency stop, allow enforcement to close
+pulls, then reset explicitly.
+
+## Resource and abuse limits
+
+The default private-alpha room policy is enforced before provider API calls:
+
+- 12 participants per room;
+- 1 active screen-share publication per participant;
+- 4 active publications per room;
+- 4 remote screen-share pulls per participant;
+- 24 remote pulls per room;
+- 6 global Cloudflare pulls in development. A private production alpha should begin near 24.
+
+Cloudflare Workers Rate Limiting bindings apply a generous coarse IP join limit before capability
+issuance and a capability-keyed control limit afterwards. These limits cover only control requests;
+they are permissive, eventually consistent anti-abuse signals and are never used as accounting or a
+financial switch.
+
+Production-like CORS requires exact comma-separated `ALLOWED_ORIGINS`; wildcard/no-origin defaults
+are not accepted when Cloudflare is enabled. CORS is only a browser policy and never substitutes for
+capability authentication.
+
+## Human-verification boundary
+
+Capability issuance accepts an optional Turnstile token. When `REQUIRE_TURNSTILE=true`, a missing
+secret, missing token, failed Siteverify request, or invalid token fails closed. Siteverify is called
+server-side only. Local development may leave Turnstile optional. The CF0 UI does not yet embed a
+widget; a future Managed, `interaction-only` widget should run once before anonymous capability
+issuance, not before every media action.
+
+## Billing reconciliation
+
+The intended future model has two separate ledgers:
+
+1. Local pessimistic Spend Guard: real-time admission and circuit breaking.
+2. Cloudflare authoritative billable usage/analytics: delayed reconciliation and calibration from a
+   separate read-only service/token.
+
+Budget Alerts, webhooks, Workers KV, and delayed provider usage cannot replace Ledger A. A future
+reconciler may make local estimates more conservative but must never lower a safety state merely
+because delayed provider data currently reports less usage. The media Worker has no Cloudflare
+account API token.
+
+## CF0 media behavior and follow-up
+
+Selective subscription remains intact: viewers discover publications without pulling media,
+`Assistir` acquires a lease and pulls exactly one selected track, and stop-watching closes and
+releases it.
+
+Room state still polls about every 1.5 seconds and heartbeats every 10 seconds. This creates many
+Worker control-plane requests but is not Realtime media egress accounting. CF0.2 should replace
+polling with push/WebSocket room events.
+
+CF0.2/CF1 must also preserve explicit watch intent, add Cloudflare simulcast and size-aware layer
+selection, choose high layers for Focus/fullscreen when appropriate, avoid decoding/egress for
+hidden or unwatched players, and remain PiP-aware. Publisher quality is not globally reduced by the
+financial guard.
+
+## Local development
+
+Copy `apps/realtime/.dev.vars.example` to `.dev.vars`, use only a development Realtime App, set a
+separate admin secret, and explicitly enable the client provider override for `/cf0`. Production
+Realtime credentials must not be used for this spike.
+
+## Official references
+
+- [Realtime SFU Sessions and Tracks](https://developers.cloudflare.com/realtime/sfu/sessions-tracks/)
+- [Realtime SFU pricing](https://developers.cloudflare.com/realtime/sfu/pricing/)
+- [Durable Object storage consistency](https://developers.cloudflare.com/durable-objects/best-practices/access-durable-objects-storage/)
+- [Workers Rate Limiting bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
+- [Turnstile server-side validation](https://developers.cloudflare.com/turnstile/get-started/server-side-validation/)
+- [Cloudflare billing cycles](https://developers.cloudflare.com/billing/understand/how-billing-works/)
+
+CF0's server gateway/push-pull patterns remain adapted from the Apache-2.0 Cloudflare Meet
+reference recorded in `THIRD_PARTY_NOTICES.md`. CF0.1 did not add substantial third-party code.

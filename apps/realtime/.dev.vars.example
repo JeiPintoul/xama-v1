@@ -3,5 +3,21 @@
 CLOUDFLARE_REALTIME_APP_ID=your-realtime-app-id
 CLOUDFLARE_REALTIME_APP_SECRET=your-realtime-app-secret
 
-# Optional: restrict browser access to the local/deployed web origin.
-ALLOWED_ORIGIN=http://localhost:5173
+# Use a separate high-entropy value. Never expose it through VITE_* variables.
+REALTIME_ADMIN_SECRET=replace-with-at-least-32-random-bytes
+
+# The /cf0 browser may request Cloudflare only when this local testing switch is explicit.
+# Keep false in production-like deployments.
+ALLOW_CLIENT_PROVIDER_OVERRIDE=true
+
+# Optional Turnstile capability-issuance protection. When REQUIRE_TURNSTILE=true,
+# a missing secret or invalid/missing browser token fails closed.
+REQUIRE_TURNSTILE=false
+TURNSTILE_SECRET_KEY=your-development-turnstile-secret
+
+# Exact comma-separated origins. Production-like deployments must configure these.
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+
+# Explicit billing-cycle identity. Accounting never resets on a calendar boundary.
+CLOUDFLARE_BILLING_CYCLE_ID=development-manual-1
+CLOUDFLARE_BILLING_CYCLE_START=2026-08-25T00:00:00Z

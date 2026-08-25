@@ -18,6 +18,7 @@ type CloudflareJoinRequest = Readonly<{
   participantId: string;
   participantName: string;
   providerMode?: MediaProviderMode;
+  turnstileToken?: string;
 }>;
 
 type SessionOptions = Readonly<{
@@ -111,6 +112,7 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
   private room: RealtimeRoomView | null = null;
   private roomId: string | null = null;
   private participantId: string | null = null;
+  private capability: string | null = null;
   private localTrack: MediaStreamTrack | null = null;
   private localTransceiver: RTCRtpTransceiver | null = null;
   private localScreenShareId: string | null = null;
@@ -139,14 +141,16 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
 
   async join({
     roomId,
-    participantId,
+    participantId: requestedParticipantId,
     participantName,
     providerMode = 'cloudflare',
+    turnstileToken,
   }: CloudflareJoinRequest): Promise<boolean> {
+    void requestedParticipantId;
     await this.leave();
     this.setSnapshot({ ...initialSnapshot, roomName: roomId, connectionState: 'connecting' });
     try {
-      const result = await this.client.join(roomId, participantId, participantName, providerMode);
+      const result = await this.client.join(roomId, participantName, providerMode, turnstileToken);
       if (result.provider !== 'cloudflare') {
         throw new Error('Esta sala foi atribuída ao LiveKit. Use a experiência Quick Share atual.');
       }
@@ -155,14 +159,14 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
       peerConnection.addEventListener('connectionstatechange', this.handleConnectionState);
       this.peerConnection = peerConnection;
       this.roomId = roomId;
-      this.participantId = participantId;
+      this.participantId = result.participantId;
+      this.capability = result.capability;
       this.room = result.room;
       this.publishRoomState(result.room, { connectionState: 'connected', error: null });
       this.roomPollTimer = window.setInterval(() => void this.pollRoom(), 1_500);
       this.heartbeatTimer = window.setInterval(() => void this.sendHeartbeat(), 10_000);
       return true;
     } catch (error) {
-      await this.client.leave(roomId, participantId).catch(() => undefined);
       await this.reset();
       this.setSnapshot({
         ...initialSnapshot,
@@ -174,10 +178,10 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
 
   async leave(): Promise<void> {
     const roomId = this.roomId;
-    const participantId = this.participantId;
+    const capability = this.capability;
     await this.reset();
-    if (roomId && participantId) {
-      await this.client.leave(roomId, participantId).catch(() => undefined);
+    if (roomId && capability) {
+      await this.client.leave(roomId, capability).catch(() => undefined);
     }
     this.setSnapshot(initialSnapshot);
   }
@@ -185,8 +189,8 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
   async startScreenShare(quality: ScreenShareQuality = 'high'): Promise<void> {
     const peerConnection = this.peerConnection;
     const roomId = this.roomId;
-    const participantId = this.participantId;
-    if (!peerConnection || !roomId || !participantId || this.localTrack) return;
+    const capability = this.capability;
+    if (!peerConnection || !roomId || !capability || this.localTrack) return;
     this.setSnapshot({
       ...this.snapshot,
       screenShareOperation: 'starting',
@@ -214,7 +218,7 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
         if (!transceiver.mid) throw new Error('O navegador não identificou a faixa publicada.');
         const response = await this.client.publish(
           roomId,
-          participantId,
+          capability,
           transceiver.mid,
           toSessionDescription(peerConnection.localDescription),
         );
@@ -226,7 +230,7 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
     } catch {
       if (this.localScreenShareId) {
         await this.client
-          .stopPublishing(roomId, participantId, this.localScreenShareId)
+          .stopPublishing(roomId, capability, this.localScreenShareId)
           .catch(() => undefined);
         this.localScreenShareId = null;
       }
@@ -242,7 +246,7 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
 
   async stopScreenShare(): Promise<void> {
     const roomId = this.roomId;
-    const participantId = this.participantId;
+    const capability = this.capability;
     const screenShareId = this.localScreenShareId;
     if (!this.localTrack) return;
     this.setSnapshot({
@@ -251,8 +255,8 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
       screenShareError: null,
     });
     this.clearLocalTrack();
-    if (roomId && participantId && screenShareId) {
-      await this.client.stopPublishing(roomId, participantId, screenShareId).catch(() => undefined);
+    if (roomId && capability && screenShareId) {
+      await this.client.stopPublishing(roomId, capability, screenShareId).catch(() => undefined);
     }
     this.localScreenShareId = null;
     if (this.room) await this.pollRoom();
@@ -377,10 +381,10 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
   private async pullScreenShare(screenShareId: string): Promise<void> {
     const peerConnection = this.peerConnection;
     const roomId = this.roomId;
-    const participantId = this.participantId;
-    if (!peerConnection || !roomId || !participantId) return;
+    const capability = this.capability;
+    if (!peerConnection || !roomId || !capability) return;
     try {
-      const response = await this.client.subscribe(roomId, participantId, screenShareId);
+      const response = await this.client.subscribe(roomId, capability, screenShareId);
       this.pendingRemoteMids.set(response.mid, screenShareId);
       await this.answerProviderOffer(response.sessionDescription);
       this.readyScreenShareIds.add(screenShareId);
@@ -395,10 +399,10 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
 
   private async unpullScreenShare(screenShareId: string): Promise<void> {
     const roomId = this.roomId;
-    const participantId = this.participantId;
-    if (!roomId || !participantId) return;
+    const capability = this.capability;
+    if (!roomId || !capability) return;
     try {
-      const offer = await this.client.unsubscribe(roomId, participantId, screenShareId);
+      const offer = await this.client.unsubscribe(roomId, capability, screenShareId);
       if (offer?.type === 'offer') await this.answerProviderOffer(offer);
     } catch {
       if (this.room)
@@ -409,24 +413,25 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
   private async answerProviderOffer(offer: CloudflareSessionDescription): Promise<void> {
     const peerConnection = this.peerConnection;
     const roomId = this.roomId;
-    const participantId = this.participantId;
-    if (!peerConnection || !roomId || !participantId) return;
+    const capability = this.capability;
+    if (!peerConnection || !roomId || !capability) return;
     await peerConnection.setRemoteDescription(offer);
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     await waitForIceGatheringComplete(peerConnection);
     await this.client.renegotiate(
       roomId,
-      participantId,
+      capability,
       toSessionDescription(peerConnection.localDescription),
     );
   }
 
   private async pollRoom(): Promise<void> {
     const roomId = this.roomId;
-    if (!roomId) return;
+    const capability = this.capability;
+    if (!roomId || !capability) return;
     try {
-      const room = await this.client.getRoom(roomId);
+      const room = await this.client.getRoom(roomId, capability);
       this.room = room;
       const activeScreenShareIds = new Set(room.screenShares.map((screenShare) => screenShare.id));
       for (const screenShareId of [...this.watchedScreenShareIds]) {
@@ -444,8 +449,8 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
   }
 
   private async sendHeartbeat(): Promise<void> {
-    if (!this.roomId || !this.participantId) return;
-    await this.client.heartbeat(this.roomId, this.participantId).catch(() => undefined);
+    if (!this.roomId || !this.capability) return;
+    await this.client.heartbeat(this.roomId, this.capability).catch(() => undefined);
   }
 
   private publishRoomState(
@@ -512,6 +517,7 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
     this.negotiationQueue = Promise.resolve();
     this.roomId = null;
     this.participantId = null;
+    this.capability = null;
   }
 
   private setSnapshot(snapshot: VoiceSessionSnapshot): void {

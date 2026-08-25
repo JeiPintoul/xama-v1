@@ -16,6 +16,14 @@ export type RealtimeRoomView = Readonly<{
   }>[];
 }>;
 
+export type CloudflareJoinResult = Readonly<{
+  provider: 'livekit' | 'cloudflare';
+  participantId: string;
+  capability: string;
+  capabilityExpiresAt: number;
+  room: RealtimeRoomView;
+}>;
+
 type FetchImplementation = typeof fetch;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -77,47 +85,59 @@ export class CloudflareRealtimeClient {
 
   async join(
     roomId: string,
-    participantId: string,
     participantName: string,
     providerMode: MediaProviderMode,
-  ): Promise<Readonly<{ provider: 'livekit' | 'cloudflare'; room: RealtimeRoomView }>> {
+    turnstileToken?: string,
+  ): Promise<CloudflareJoinResult> {
     const payload = await this.request(roomId, 'join', {
-      participantId,
       participantName,
       providerMode,
+      ...(turnstileToken ? { turnstileToken } : {}),
     });
     if (
       !isRecord(payload) ||
-      (payload.provider !== 'livekit' && payload.provider !== 'cloudflare')
+      (payload.provider !== 'livekit' && payload.provider !== 'cloudflare') ||
+      typeof payload.participantId !== 'string' ||
+      typeof payload.capability !== 'string' ||
+      typeof payload.capabilityExpiresAt !== 'number'
     ) {
       throw new Error('O servidor de mídia retornou uma seleção inválida.');
     }
-    return { provider: payload.provider, room: parseRoom(payload.room) };
+    return {
+      provider: payload.provider,
+      participantId: payload.participantId,
+      capability: payload.capability,
+      capabilityExpiresAt: payload.capabilityExpiresAt,
+      room: parseRoom(payload.room),
+    };
   }
 
-  async getRoom(roomId: string): Promise<RealtimeRoomView> {
-    const payload = await this.request(roomId, 'state', undefined, 'GET');
+  async getRoom(roomId: string, capability: string): Promise<RealtimeRoomView> {
+    const payload = await this.request(roomId, 'state', undefined, 'GET', false, capability);
     if (!isRecord(payload)) throw new Error('O estado da sala é inválido.');
     return parseRoom(payload.room);
   }
 
-  async heartbeat(roomId: string, participantId: string): Promise<void> {
-    await this.request(roomId, 'heartbeat', { participantId });
+  async heartbeat(roomId: string, capability: string): Promise<void> {
+    await this.request(roomId, 'heartbeat', {}, 'POST', false, capability);
   }
 
   async publish(
     roomId: string,
-    participantId: string,
+    capability: string,
     mid: string,
     sessionDescription: CloudflareSessionDescription,
   ): Promise<
     Readonly<{ screenShareId: string; sessionDescription: CloudflareSessionDescription }>
   > {
-    const payload = await this.request(roomId, 'publish', {
-      participantId,
-      mid,
-      sessionDescription,
-    });
+    const payload = await this.request(
+      roomId,
+      'publish',
+      { mid, sessionDescription },
+      'POST',
+      false,
+      capability,
+    );
     if (!isRecord(payload) || typeof payload.screenShareId !== 'string') {
       throw new Error('O servidor de mídia não registrou a transmissão.');
     }
@@ -126,25 +146,23 @@ export class CloudflareRealtimeClient {
     return { screenShareId: payload.screenShareId, sessionDescription: answer };
   }
 
-  async stopPublishing(
-    roomId: string,
-    participantId: string,
-    screenShareId: string,
-  ): Promise<void> {
-    await this.request(roomId, 'stop-publishing', { participantId, screenShareId });
+  async stopPublishing(roomId: string, capability: string, screenShareId: string): Promise<void> {
+    await this.request(roomId, 'stop-publishing', { screenShareId }, 'POST', false, capability);
   }
 
   async subscribe(
     roomId: string,
-    participantId: string,
+    capability: string,
     screenShareId: string,
-  ): Promise<
-    Readonly<{
-      mid: string;
-      sessionDescription: CloudflareSessionDescription;
-    }>
-  > {
-    const payload = await this.request(roomId, 'subscribe', { participantId, screenShareId });
+  ): Promise<Readonly<{ mid: string; sessionDescription: CloudflareSessionDescription }>> {
+    const payload = await this.request(
+      roomId,
+      'subscribe',
+      { screenShareId },
+      'POST',
+      false,
+      capability,
+    );
     if (!isRecord(payload) || typeof payload.mid !== 'string') {
       throw new Error('O servidor de mídia não criou a assinatura.');
     }
@@ -155,23 +173,30 @@ export class CloudflareRealtimeClient {
 
   async unsubscribe(
     roomId: string,
-    participantId: string,
+    capability: string,
     screenShareId: string,
   ): Promise<CloudflareSessionDescription | undefined> {
-    const payload = await this.request(roomId, 'unsubscribe', { participantId, screenShareId });
+    const payload = await this.request(
+      roomId,
+      'unsubscribe',
+      { screenShareId },
+      'POST',
+      false,
+      capability,
+    );
     return isRecord(payload) ? parseSessionDescription(payload.sessionDescription) : undefined;
   }
 
   async renegotiate(
     roomId: string,
-    participantId: string,
+    capability: string,
     sessionDescription: CloudflareSessionDescription,
   ): Promise<void> {
-    await this.request(roomId, 'renegotiate', { participantId, sessionDescription });
+    await this.request(roomId, 'renegotiate', { sessionDescription }, 'POST', false, capability);
   }
 
-  async leave(roomId: string, participantId: string): Promise<void> {
-    await this.request(roomId, 'leave', { participantId }, 'POST', true);
+  async leave(roomId: string, capability: string): Promise<void> {
+    await this.request(roomId, 'leave', {}, 'POST', true, capability);
   }
 
   private async request(
@@ -180,17 +205,20 @@ export class CloudflareRealtimeClient {
     body?: unknown,
     method: 'GET' | 'POST' = 'POST',
     keepalive = false,
+    capability?: string,
   ): Promise<unknown> {
     if (!this.endpoint) throw new Error('Configure VITE_REALTIME_ENDPOINT para testar Cloudflare.');
+    const headers = new Headers();
+    if (body !== undefined) headers.set('Content-Type', 'application/json');
+    if (capability) headers.set('Authorization', `Bearer ${capability}`);
     let response: Response;
     try {
       response = await this.fetchImplementation(
         `${this.endpoint}/rooms/${encodeURIComponent(roomId)}/${action}`,
         {
           method,
-          ...(body === undefined
-            ? {}
-            : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+          headers,
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
           keepalive,
         },
       );
