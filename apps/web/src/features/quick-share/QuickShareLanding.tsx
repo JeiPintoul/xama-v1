@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { useFeedback } from '@/features/feedback/feedback-context';
-import { createQuickRoom } from '@/features/quick-share/quick-room-client';
+import {
+  createQuickRoom,
+  getQuickRoomJoinErrorMessage,
+  joinQuickRoom,
+} from '@/features/quick-share/quick-room-client';
 import {
   formatQuickRoomCode,
   getQuickRoomName,
@@ -18,11 +22,17 @@ function getInitialDisplayName(): string {
 
 export function QuickShareLanding() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showFeedback } = useFeedback();
   const { join } = useVoiceSession();
   const [displayName, setDisplayName] = useState(getInitialDisplayName);
-  const [roomCode, setRoomCode] = useState('');
+  const [roomCode, setRoomCode] = useState(() => {
+    const requestedRoom = searchParams.get('room')?.trim().toUpperCase() ?? '';
+    return formatQuickRoomCode(requestedRoom);
+  });
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   async function createRoom() {
     const name = displayName.trim();
@@ -42,10 +52,12 @@ export function QuickShareLanding() {
       const code = normalizeQuickRoomCode(connection.code);
       if (!code) throw new Error('Não foi possível criar a sala. Tente novamente.');
 
-      void join({
+      const didConnect = await join({
         roomName: getQuickRoomName(code),
         getConnectionDetails: async () => connection,
       });
+      if (!didConnect) throw new Error('Não foi possível criar a sala. Tente novamente.');
+
       navigate(`/r/${formatQuickRoomCode(code)}`);
     } catch (error) {
       showFeedback(
@@ -57,15 +69,45 @@ export function QuickShareLanding() {
     }
   }
 
-  function goToRoom(event: FormEvent<HTMLFormElement>) {
+  async function enterRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const code = normalizeQuickRoomCode(roomCode);
-    if (!code) {
-      showFeedback('Use um código de sala válido.', 'error');
+    setJoinError(null);
+    const name = displayName.trim();
+    if (!name) {
+      setJoinError('Informe seu nome para entrar.');
       return;
     }
 
-    navigate(`/r/${formatQuickRoomCode(code)}`);
+    const code = normalizeQuickRoomCode(roomCode);
+    if (!code) {
+      setJoinError('Use um código de sala válido.');
+      return;
+    }
+
+    setIsJoining(true);
+    const identity = getOrCreateGuestIdentity(window.localStorage, name, () => crypto.randomUUID());
+    try {
+      const connection = await joinQuickRoom(
+        import.meta.env.VITE_QUICK_ROOM_ENDPOINT ?? '',
+        code,
+        identity.id,
+        identity.displayName,
+      );
+      const didConnect = await join({
+        roomName: getQuickRoomName(code),
+        getConnectionDetails: async () => connection,
+      });
+      if (!didConnect) {
+        setJoinError('Não foi possível entrar na sala. Tente novamente.');
+        return;
+      }
+
+      navigate(`/r/${formatQuickRoomCode(code)}`);
+    } catch (error) {
+      setJoinError(getQuickRoomJoinErrorMessage(error));
+    } finally {
+      setIsJoining(false);
+    }
   }
 
   return (
@@ -100,7 +142,10 @@ export function QuickShareLanding() {
               <input
                 id="quick-display-name"
                 value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
+                onChange={(event) => {
+                  setDisplayName(event.target.value);
+                  setJoinError(null);
+                }}
                 maxLength={64}
                 autoComplete="name"
                 placeholder="Como você quer aparecer?"
@@ -108,7 +153,7 @@ export function QuickShareLanding() {
               />
               <button
                 type="button"
-                disabled={isCreating}
+                disabled={isCreating || isJoining}
                 onClick={() => void createRoom()}
                 className="mt-3 min-h-11 w-full cursor-pointer rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -118,24 +163,37 @@ export function QuickShareLanding() {
               <div className="my-4 flex items-center gap-3 text-xs text-text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
                 ou
               </div>
-              <form onSubmit={goToRoom} className="flex flex-col gap-2 sm:flex-row">
-                <label className="sr-only" htmlFor="quick-room-code">
-                  Código da sala
-                </label>
-                <input
-                  id="quick-room-code"
-                  value={roomCode}
-                  onChange={(event) => setRoomCode(event.target.value.toUpperCase())}
-                  placeholder="Código da sala"
-                  autoComplete="off"
-                  className="min-h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-base tracking-[0.08em] outline-none placeholder:tracking-normal placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-ring"
-                />
-                <button
-                  type="submit"
-                  className="min-h-11 w-full cursor-pointer rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none transition hover:border-primary/50 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
-                >
-                  Entrar
-                </button>
+              <form onSubmit={(event) => void enterRoom(event)}>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <label className="sr-only" htmlFor="quick-room-code">
+                    Código da sala
+                  </label>
+                  <input
+                    id="quick-room-code"
+                    value={roomCode}
+                    onChange={(event) => {
+                      setRoomCode(event.target.value.toUpperCase());
+                      setJoinError(null);
+                    }}
+                    placeholder="Código da sala"
+                    autoComplete="off"
+                    aria-invalid={Boolean(joinError)}
+                    aria-describedby={joinError ? 'quick-room-join-error' : undefined}
+                    className="min-h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-base tracking-[0.08em] outline-none placeholder:tracking-normal placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isJoining || isCreating}
+                    className="min-h-11 w-full cursor-pointer rounded-md border border-border px-4 text-sm font-semibold text-text-secondary outline-none transition hover:border-primary/50 hover:bg-surface-raised hover:text-foreground active:translate-y-px active:bg-surface focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  >
+                    {isJoining ? 'Entrando…' : 'Entrar'}
+                  </button>
+                </div>
+                {joinError ? (
+                  <p id="quick-room-join-error" role="alert" className="mt-2 text-sm text-danger">
+                    {joinError}
+                  </p>
+                ) : null}
               </form>
             </div>
           </div>

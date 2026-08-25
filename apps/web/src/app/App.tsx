@@ -23,7 +23,7 @@ function QuickShareRoomRoute() {
   const normalizedCode = normalizeQuickRoomCode(code ?? '');
 
   if (!normalizedCode) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={`/?room=${encodeURIComponent(code ?? '')}`} replace />;
   }
 
   return <QuickShareRoom code={normalizedCode} />;

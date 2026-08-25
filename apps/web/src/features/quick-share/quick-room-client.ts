@@ -18,6 +18,15 @@ export type QuickRoomConnection = LiveKitConnectionDetails &
     code: string;
   }>;
 
+const quickRoomNotFoundMessage = 'Esta sala não foi encontrada ou já expirou.';
+const quickRoomJoinFailureMessage = 'Não foi possível entrar na sala. Tente novamente.';
+
+export function getQuickRoomJoinErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message === quickRoomNotFoundMessage
+    ? quickRoomNotFoundMessage
+    : quickRoomJoinFailureMessage;
+}
+
 function isQuickRoomConnection(value: unknown): value is QuickRoomConnection {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -52,14 +61,14 @@ async function requestQuickRoom(
   }
 
   if (response.status === 404) {
-    throw new LiveKitTokenRequestError('Esta sala não existe ou expirou.');
+    throw new LiveKitTokenRequestError(quickRoomNotFoundMessage);
   }
 
   if (!response.ok) {
     throw new LiveKitTokenRequestError(
       request.action === 'create'
         ? 'Não foi possível criar a sala. Tente novamente.'
-        : 'Não foi possível entrar nesta sala.',
+        : quickRoomJoinFailureMessage,
     );
   }
 

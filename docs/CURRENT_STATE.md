@@ -32,6 +32,8 @@ The existing full Xama application shell, communities, channels, adaptive naviga
 
 Quick Share is the current public-test experience: create a temporary room, share its code/link, then join to watch or publish screens. It has no community/channel shell, authentication, room history, or database-backed rooms.
 
+The landing is the single Quick Share entry surface. Joining validates the temporary room and completes the media-session connection before navigating; invalid or expired codes remain inline on the landing. Direct `/r/:code` visits without a matching active session return to `/?room=:code` so the shared code stays prefilled without connecting automatically.
+
 The `quick-room` Supabase Edge Function generates an 8-character code from an unambiguous alphabet, maps it to an ephemeral `quick:` LiveKit room, explicitly creates that room, and issues short-lived join/publish/subscribe tokens. Quick Rooms use a 10-minute empty timeout, 60-second departure timeout, and 12-participant limit. LiveKit credentials stay server-side.
 
 Existing mock-community voice routes and the original access-gated token endpoint remain available only for development. They are intentionally not the Quick Share flow.

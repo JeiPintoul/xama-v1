@@ -12,7 +12,16 @@ export function VoiceSessionProvider({ children }: PropsWithChildren) {
     session.getSnapshot,
     session.getSnapshot,
   );
-  const join = useCallback((request: JoinVoiceRoomRequest) => session.join(request), [session]);
+  const join = useCallback(
+    async (request: JoinVoiceRoomRequest) => {
+      await session.join(request);
+      const nextSnapshot = session.getSnapshot();
+      return (
+        nextSnapshot.roomName === request.roomName && nextSnapshot.connectionState === 'connected'
+      );
+    },
+    [session],
+  );
   const leave = useCallback(() => session.leave(), [session]);
   const startScreenShare = useCallback(
     (quality?: ScreenShareQuality) => session.startScreenShare(quality),

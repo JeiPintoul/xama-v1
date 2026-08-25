@@ -9,7 +9,7 @@ import type {
 
 export type VoiceSessionContextValue = Readonly<{
   snapshot: VoiceSessionSnapshot;
-  join: (request: JoinVoiceRoomRequest) => Promise<void>;
+  join: (request: JoinVoiceRoomRequest) => Promise<boolean>;
   leave: () => Promise<void>;
   startScreenShare: (quality?: ScreenShareQuality) => Promise<void>;
   stopScreenShare: () => Promise<void>;

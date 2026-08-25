@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router';
 
 import { useFeedback } from '@/features/feedback/feedback-context';
-import { joinQuickRoom } from '@/features/quick-share/quick-room-client';
 import { formatQuickRoomCode, getQuickRoomName } from '@/features/quick-share/room-code';
 import { supportsScreenSharePublishing } from '@/features/quick-share/screen-share-capability';
 import {
   loadScreenShareQuality,
   saveScreenShareQuality,
 } from '@/features/quick-share/screen-share-quality';
-import { getOrCreateGuestIdentity, loadGuestIdentity } from '@/features/voice/guest-identity';
 import type { ScreenShareQuality } from '@/features/voice/media-session';
 import { ScreenSharePresentation } from '@/features/voice/ScreenSharePresentation';
 import { useVoiceSession } from '@/features/voice/voice-session-context';
@@ -26,10 +24,6 @@ const qualityOptions: readonly Readonly<{
   { value: 'balanced', label: 'Equilibrada', target: '720p · 30 FPS' },
   { value: 'high', label: 'Alta', target: '1080p · 30 FPS' },
 ];
-
-function getInitialDisplayName(): string {
-  return loadGuestIdentity(window.localStorage)?.displayName ?? '';
-}
 
 function getScreenShareActionLabel(
   operation: 'idle' | 'starting' | 'stopping',
@@ -99,7 +93,6 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
   const { showFeedback } = useFeedback();
   const {
     snapshot,
-    join,
     leave,
     startScreenShare,
     stopScreenShare,
@@ -113,13 +106,10 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
     watchScreenShare,
     stopWatchingScreenShare,
   } = useVoiceSession();
-  const [displayName, setDisplayName] = useState(getInitialDisplayName);
   const [quality, setQuality] = useState(() => loadScreenShareQuality(window.localStorage));
   const [isFocusMode, setIsFocusMode] = useState(false);
-  const didAttemptSavedIdentityJoin = useRef(false);
   const roomName = getQuickRoomName(code);
   const isCurrentRoom = snapshot.roomName === roomName;
-  const isConnected = isCurrentRoom && snapshot.connectionState === 'connected';
   const isConnecting = isCurrentRoom && snapshot.connectionState === 'connecting';
   const canPublish = supportsScreenSharePublishing();
 
@@ -127,33 +117,6 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
     if (!snapshot.error || !isCurrentRoom) return;
     showFeedback(snapshot.error, 'error');
   }, [isCurrentRoom, showFeedback, snapshot.error]);
-
-  useEffect(() => {
-    const savedName = getInitialDisplayName();
-    if (!savedName || didAttemptSavedIdentityJoin.current || isCurrentRoom) return;
-    didAttemptSavedIdentityJoin.current = true;
-    void enterRoom(savedName);
-  });
-
-  async function enterRoom(submittedName = displayName) {
-    const name = submittedName.trim();
-    if (!name) {
-      showFeedback('Informe seu nome para entrar.', 'error');
-      return;
-    }
-
-    const identity = getOrCreateGuestIdentity(window.localStorage, name, () => crypto.randomUUID());
-    await join({
-      roomName,
-      getConnectionDetails: () =>
-        joinQuickRoom(
-          import.meta.env.VITE_QUICK_ROOM_ENDPOINT ?? '',
-          code,
-          identity.id,
-          identity.displayName,
-        ),
-    });
-  }
 
   async function copy(value: string, message: string) {
     try {
@@ -174,50 +137,24 @@ export function QuickShareRoom({ code }: QuickShareRoomProps) {
     saveScreenShareQuality(window.localStorage, nextQuality);
   }
 
-  if (!isConnected && !(isCurrentRoom && snapshot.connectionState === 'reconnecting')) {
+  if (
+    !isCurrentRoom ||
+    !['connecting', 'connected', 'reconnecting'].includes(snapshot.connectionState)
+  ) {
+    return <Navigate to={`/?room=${encodeURIComponent(formatQuickRoomCode(code))}`} replace />;
+  }
+
+  if (isConnecting) {
     return (
       <main className="flex min-h-svh items-center justify-center bg-background px-5 py-6 text-foreground">
-        <section className="w-full max-w-sm rounded-xl border border-border bg-surface p-4 shadow-2xl shadow-black/20 sm:p-5">
+        <section
+          className="w-full max-w-sm rounded-xl border border-border bg-surface p-4 text-center shadow-2xl shadow-black/20 sm:p-5"
+          aria-label={`Entrando na sala ${formatQuickRoomCode(code)}`}
+        >
           <img src="/brand/xama-lockup.png" alt="Xama" className="h-7 w-auto" />
-          <p className="mt-6 text-xs font-medium tracking-[0.14em] text-primary uppercase">
-            Quick Share
+          <p className="mt-5 text-sm text-text-secondary" role="status">
+            Entrando na sala…
           </p>
-          <h1 className="mt-2.5 text-2xl font-semibold tracking-tight">
-            Sala {formatQuickRoomCode(code)}
-          </h1>
-          <p className="mt-2.5 text-sm leading-6 text-text-secondary">
-            Entre para assistir e compartilhar telas nesta sala temporária.
-          </p>
-          <form
-            className="mt-5 space-y-3.5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void enterRoom();
-            }}
-          >
-            <div>
-              <label htmlFor="quick-room-display-name" className="text-sm font-medium">
-                Seu nome
-              </label>
-              <input
-                id="quick-room-display-name"
-                value={displayName}
-                onChange={(event) => setDisplayName(event.target.value)}
-                maxLength={64}
-                autoComplete="name"
-                disabled={isConnecting}
-                className="mt-1.5 min-h-11 w-full rounded-md border border-border bg-background px-3 text-base outline-none placeholder:text-text-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                placeholder="Como você quer aparecer?"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isConnecting}
-              className="min-h-11 w-full cursor-pointer rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground outline-none transition hover:bg-primary/85 active:translate-y-px active:bg-primary/75 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isConnecting ? 'Entrando…' : 'Entrar na sala'}
-            </button>
-          </form>
         </section>
       </main>
     );
