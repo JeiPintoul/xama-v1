@@ -9,10 +9,10 @@
   },
   "scripts": {
     "dev": "pnpm --filter @xama/web dev",
-    "build": "pnpm typecheck && pnpm --filter @xama/web build",
+    "build": "pnpm typecheck && pnpm --filter @xama/web build && pnpm --filter @xama/realtime build",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "pnpm --recursive --if-present typecheck",
-    "test": "pnpm --filter @xama/web test",
+    "test": "pnpm --recursive --if-present test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

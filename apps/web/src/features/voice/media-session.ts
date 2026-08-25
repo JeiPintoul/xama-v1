@@ -1,58 +1,22 @@
-export type VoiceConnectionState =
-  'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+import type {
+  MediaSessionSnapshot,
+  ScreenShareMediaDiagnostics,
+  ScreenShareQuality,
+} from '@xama/media-core';
 
-export type VoiceParticipant = Readonly<{
-  identity: string;
-  name: string;
-  isLocal: boolean;
-}>;
+export type {
+  ScreenShare,
+  ScreenShareAudioState,
+  ScreenShareMediaDiagnostics,
+  ScreenShareQuality,
+  ScreenShareViewer,
+  ScreenShareWatchState,
+} from '@xama/media-core';
+export { getScreenShareMuteVolume } from '@xama/media-core';
 
-export type ScreenShareViewer = VoiceParticipant;
-
-export type ScreenShareWatchState = 'available' | 'subscribing' | 'ready';
-
-export type ScreenShareAudioState = 'none' | 'available' | 'subscribing' | 'ready';
-
-export type ScreenShareQuality = 'balanced' | 'high';
-
-export function getScreenShareMuteVolume(
-  currentVolume: number,
-  lastAudibleVolume: number | undefined,
-): number {
-  return currentVolume > 0 ? 0 : (lastAudibleVolume ?? 1);
-}
-
-export type ScreenShareMediaDiagnostics = Readonly<{
-  provider: string;
-  bitrateKbps: number | null;
-  framesPerSecond: number | null;
-  codec: string | null;
-  streamState: 'active' | 'paused' | 'unknown';
-}>;
-
-export type ScreenShare = Readonly<{
-  id: string;
-  participantIdentity: string;
-  participantName: string;
-  isLocal: boolean;
-  hasAudio: boolean;
-  audioState: ScreenShareAudioState;
-  audioTrackId: string | null;
-  watchState: ScreenShareWatchState;
-  volume: number;
-  viewers: readonly ScreenShareViewer[];
-}>;
-
-export type VoiceSessionSnapshot = Readonly<{
-  roomName: string | null;
-  connectionState: VoiceConnectionState;
-  participants: readonly VoiceParticipant[];
-  screenShares: readonly ScreenShare[];
-  isLocalScreenSharing: boolean;
-  screenShareOperation: 'idle' | 'starting' | 'stopping';
-  screenShareError: string | null;
-  error: string | null;
-}>;
+export type VoiceConnectionState = import('@xama/media-core').MediaConnectionState;
+export type VoiceParticipant = import('@xama/media-core').MediaParticipant;
+export type VoiceSessionSnapshot = MediaSessionSnapshot;
 
 export type MediaConnectionDetails = Readonly<{
   serverUrl: string;
@@ -62,4 +26,21 @@ export type MediaConnectionDetails = Readonly<{
 export type JoinVoiceRoomRequest = Readonly<{
   roomName: string;
   getConnectionDetails: () => Promise<MediaConnectionDetails>;
+}>;
+
+export type BrowserMediaSession = Readonly<{
+  getSnapshot: () => VoiceSessionSnapshot;
+  subscribe: (listener: () => void) => () => void;
+  leave: () => Promise<void>;
+  startScreenShare: (quality?: ScreenShareQuality) => Promise<void>;
+  stopScreenShare: () => Promise<void>;
+  setScreenShareVolume: (screenShareId: string, volume: number) => void;
+  toggleScreenShareMute: (screenShareId: string) => void;
+  attachScreenShareVideo: (screenShareId: string, element: HTMLVideoElement) => void;
+  detachScreenShareVideo: (screenShareId: string, element: HTMLVideoElement) => void;
+  attachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  detachScreenShareAudio: (screenShareId: string, element: HTMLAudioElement) => void;
+  getScreenShareDiagnostics: (screenShareId: string) => Promise<ScreenShareMediaDiagnostics | null>;
+  watchScreenShare: (screenShareId: string) => void;
+  stopWatchingScreenShare: (screenShareId: string) => void;
 }>;

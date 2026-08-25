@@ -4,6 +4,8 @@ coverage/
 .vite/
 *.tsbuildinfo
 supabase/.temp
+.wrangler/
+.dev.vars
 
 .env
 .env.*

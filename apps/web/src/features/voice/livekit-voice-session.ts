@@ -13,6 +13,7 @@ import {
 } from 'livekit-client';
 
 import type {
+  BrowserMediaSession,
   JoinVoiceRoomRequest,
   ScreenShare,
   ScreenShareMediaDiagnostics,
@@ -112,7 +113,7 @@ function toSafeError(error: unknown): string {
   return 'Não foi possível conectar à sala. Tente novamente.';
 }
 
-export class LiveKitVoiceSession {
+export class LiveKitVoiceSession implements BrowserMediaSession {
   private room: Room | null = null;
   private snapshot: VoiceSessionSnapshot = initialSnapshot;
   private readonly listeners = new Set<SnapshotListener>();

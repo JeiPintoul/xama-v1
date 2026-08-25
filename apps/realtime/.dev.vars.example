@@ -1,0 +1,7 @@
+# Create a Realtime SFU application in the Cloudflare dashboard.
+# Copy this file to .dev.vars and replace the placeholders locally.
+CLOUDFLARE_REALTIME_APP_ID=your-realtime-app-id
+CLOUDFLARE_REALTIME_APP_SECRET=your-realtime-app-secret
+
+# Optional: restrict browser access to the local/deployed web origin.
+ALLOWED_ORIGIN=http://localhost:5173

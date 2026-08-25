@@ -756,6 +756,12 @@ LiveKit adapter
 
 This allows media behavior and UX state to remain understandable even if provider details change.
 
+The isolated CF0 spike adds a second provider implementation without replacing this working
+path. Portable media concepts live in `packages/media-core`; browser adapters remain in `apps/web`;
+and server-owned provider selection plus Cloudflare-specific coordination live in `apps/realtime`.
+See `docs/CLOUDFLARE_REALTIME_CF0.md` for the spike boundaries, automatic-routing direction, and
+explicit non-goals.
+
 ---
 
 ## LiveKit Authentication
