@@ -4,6 +4,7 @@ import {
   SpendGuardLedger,
   type PullLeaseDecision,
   type PullLeaseRequest,
+  type SessionSlotDecision,
   type SpendGuardCycle,
   type SpendGuardStatus,
   type StoredSpendGuardState,
@@ -57,8 +58,45 @@ export class SpendGuard {
     if (request.method !== 'POST' || !isRecord(payload))
       return json({ error: 'Invalid request.' }, 400);
 
-    if (path === '/session-admission') {
-      return json(await this.mutate((ledger) => ledger.admitSession(now)));
+    if (
+      path === '/sessions/acquire' &&
+      typeof payload.roomId === 'string' &&
+      typeof payload.participantId === 'string'
+    ) {
+      return json(
+        await this.mutate((ledger) =>
+          ledger.acquireSessionSlot(
+            payload.roomId as string,
+            payload.participantId as string,
+            crypto.randomUUID(),
+            now,
+          ),
+        ),
+      );
+    }
+    if (
+      path === '/sessions/renew' &&
+      typeof payload.sessionSlotId === 'string' &&
+      typeof payload.roomId === 'string' &&
+      typeof payload.participantId === 'string'
+    ) {
+      return json(
+        await this.mutate((ledger) =>
+          ledger.renewSessionSlot(
+            payload.sessionSlotId as string,
+            payload.roomId as string,
+            payload.participantId as string,
+            now,
+          ),
+        ),
+      );
+    }
+    if (path === '/sessions/release' && typeof payload.sessionSlotId === 'string') {
+      return json(
+        await this.mutate((ledger) => ({
+          released: ledger.releaseSessionSlot(payload.sessionSlotId as string, now),
+        })),
+      );
     }
     if (
       path === '/leases/acquire' &&
@@ -97,6 +135,13 @@ export class SpendGuard {
         await this.mutate((ledger) =>
           ledger.enforceLeases(payload.leaseIds as readonly string[], now),
         ),
+      );
+    }
+    if (path === '/leases/closing' && typeof payload.leaseId === 'string') {
+      return json(
+        await this.mutate((ledger) => ({
+          marked: ledger.markLeaseClosing(payload.leaseId as string, now),
+        })),
       );
     }
     if (path === '/leases/release' && typeof payload.leaseId === 'string') {
@@ -181,10 +226,28 @@ export function getSpendGuardStatus(env: RealtimeEnv): Promise<SpendGuardStatus>
   return callSpendGuard(env, '/status', undefined, 'GET');
 }
 
-export function admitCloudflareSession(
+export function acquireCloudflareSessionSlot(
   env: RealtimeEnv,
-): Promise<Readonly<{ allowed: boolean; reason?: string }>> {
-  return callSpendGuard(env, '/session-admission', {});
+  roomId: string,
+  participantId: string,
+): Promise<SessionSlotDecision> {
+  return callSpendGuard(env, '/sessions/acquire', { roomId, participantId });
+}
+
+export function renewCloudflareSessionSlot(
+  env: RealtimeEnv,
+  sessionSlotId: string,
+  roomId: string,
+  participantId: string,
+): Promise<Readonly<{ renewed: boolean; expiresAt?: number }>> {
+  return callSpendGuard(env, '/sessions/renew', { sessionSlotId, roomId, participantId });
+}
+
+export async function releaseCloudflareSessionSlot(
+  env: RealtimeEnv,
+  sessionSlotId: string,
+): Promise<void> {
+  await callSpendGuard(env, '/sessions/release', { sessionSlotId });
 }
 
 export function acquirePullLease(
@@ -208,6 +271,10 @@ export function enforcePullLeases(
   leaseIds: readonly string[],
 ): Promise<Readonly<{ activeLeaseIds: readonly string[]; revokedLeaseIds: readonly string[] }>> {
   return callSpendGuard(env, '/leases/enforce', { leaseIds });
+}
+
+export async function markPullLeaseClosing(env: RealtimeEnv, leaseId: string): Promise<void> {
+  await callSpendGuard(env, '/leases/closing', { leaseId });
 }
 
 export async function releasePullLease(env: RealtimeEnv, leaseId: string): Promise<void> {

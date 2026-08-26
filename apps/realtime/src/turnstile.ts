@@ -12,7 +12,15 @@ export async function verifyCapabilityIssuance(
 ): Promise<'allowed' | 'required' | 'unavailable' | 'failed'> {
   const required = parseBoolean(env.REQUIRE_TURNSTILE, false);
   const secret = env.TURNSTILE_SECRET_KEY;
-  if (!secret) return required ? 'unavailable' : 'allowed';
+  const expectedHostnames = (env.TURNSTILE_EXPECTED_HOSTNAMES ?? '')
+    .split(',')
+    .map((hostname) => hostname.trim().toLowerCase())
+    .filter(Boolean);
+  const expectedAction = env.TURNSTILE_EXPECTED_ACTION?.trim();
+  if (required && (!secret || expectedHostnames.length === 0 || !expectedAction)) {
+    return 'unavailable';
+  }
+  if (!secret) return 'allowed';
   if (!token) return required ? 'required' : 'allowed';
 
   const form = new FormData();
@@ -27,7 +35,21 @@ export async function verifyCapabilityIssuance(
       { method: 'POST', body: form },
     );
     const payload: unknown = await response.json();
-    return response.ok && isRecord(payload) && payload.success === true ? 'allowed' : 'failed';
+    if (!response.ok || !isRecord(payload) || payload.success !== true) return 'failed';
+    if (
+      expectedHostnames.length > 0 &&
+      (typeof payload.hostname !== 'string' ||
+        !expectedHostnames.includes(payload.hostname.toLowerCase()))
+    ) {
+      return 'failed';
+    }
+    if (
+      expectedAction &&
+      (typeof payload.action !== 'string' || payload.action !== expectedAction)
+    ) {
+      return 'failed';
+    }
+    return 'allowed';
   } catch {
     return 'failed';
   }

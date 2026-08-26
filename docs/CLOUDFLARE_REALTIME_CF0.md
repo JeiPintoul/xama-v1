@@ -1,7 +1,7 @@
-# CF0.1 — Cloudflare Realtime security and Spend Guard
+# CF0.1.1 — Cloudflare Realtime security and cost-control hardening
 
 CF0 remains an isolated infrastructure spike on `spike/cloudflare-realtime`. The working LiveKit
-Quick Share implementation is unchanged. CF0.1 hardens only the Cloudflare control plane; it does
+Quick Share implementation is unchanged. CF0.1/CF0.1.1 harden only the Cloudflare control plane; they do
 not add CF1 feature parity or expose the production Realtime App.
 
 ## Boundaries and threat model
@@ -53,7 +53,14 @@ constant name `environment`. Its transactional, strongly consistent storage owns
 - soft- and hard-budget thresholds;
 - the explicit billing-cycle identity;
 - conservative estimated egress for that cycle;
-- active remote-pull leases and the global active-pull count.
+- active/closing remote-pull leases and the global active-pull count;
+- short-lived global Cloudflare Session slots and the environment-wide Session count.
+
+The enforced invariant is one authorized Xama subscription to one Spend Guard lease to at most one
+Cloudflare remote pull. A duplicate lease acquisition returns `already-active`; only heartbeat may
+renew a lease. Room state also rejects an existing participant/screen-share subscription before the
+provider call, while the singleton Spend Guard transaction remains the final protection when room
+requests interleave around external awaits.
 
 Every `pullTrack()` first acquires a Spend Guard lease. The default lease is 40 seconds. The existing
 10-second participant heartbeat renews active leases; no separate high-frequency renewal request
@@ -61,11 +68,25 @@ was added. The 15-second RoomCoordinator alarm checks every lease, closes expire
 provider pulls, removes them from room state, and retries failed `tracks/close` operations from
 durable pending-closure state.
 
+Once a provider pull may have been created, its lease is never released first. Later application or
+persistence failure moves the lease to `closing`, durably queues the provider closure, and releases
+accounting only after `tracks/close` succeeds. Unknown/partial provider results retain their lease
+and are retried or surfaced through structured closure-pending logs; the logs contain counts and
+failure state, not capabilities, authorization headers, SDP, Session IDs, or secrets.
+
 The default accounting envelope is 12,000,000 bits/second for every authorized remote video pull.
 That value is intentionally above expected 1080p30 delivery and is configured with
 `CLOUDFLARE_ACCOUNTING_BITS_PER_SECOND_PER_PULL`. It does not configure encoder or stream quality.
-Estimated bytes accrue from elapsed server-authorized lease time; browser counters and submitted
-usage values are never trusted.
+Estimated bytes accrue from elapsed server-authorized lease/provider-closure exposure; browser
+counters and submitted usage values are never trusted. Admission reports and evaluates:
+
+- `estimatedEgressBytes`: accrued pessimistic usage;
+- `reservedEgressBytes`: remaining authorization for active leases, plus a conservative rolling
+  closure window for provider pulls still awaiting confirmed closure;
+- `projectedWorstCaseEgressBytes`: accrued plus reserved exposure.
+
+Acquisition and renewal must keep the projected worst case below the hard budget. Elapsed lease
+time is accrued before remaining authorization is reserved, so it is not double-counted.
 
 Spend Guard is a pessimistic financial circuit breaker, not Cloudflare's authoritative bill. It
 cannot be byte exact because the Worker is not in the media packet path.
@@ -117,6 +138,11 @@ The admin secret must be independently generated, high entropy, Worker-only, and
 Cycle reset fails while pull leases are active; use emergency stop, allow enforcement to close
 pulls, then reset explicitly.
 
+Status includes enabled/emergency state, accrued/reserved/projected egress, active and closing pull
+counts, and active Cloudflare Session slots. Repeated provider-close failures emit a structured
+`cloudflare_provider_track_close_pending` log with counts only, so pending closure work is visible
+without disclosing media or authorization identifiers.
+
 ## Resource and abuse limits
 
 The default private-alpha room policy is enforced before provider API calls:
@@ -126,7 +152,14 @@ The default private-alpha room policy is enforced before provider API calls:
 - 4 active publications per room;
 - 4 remote screen-share pulls per participant;
 - 24 remote pulls per room;
-- 6 global Cloudflare pulls in development. A private production alpha should begin near 24.
+- 6 global Cloudflare pulls in development. A private production alpha should begin near 24;
+- 16 concurrent Cloudflare Sessions in development, enforced by the Spend Guard singleton. A
+  private production alpha should begin conservatively near 64.
+
+A Cloudflare participant reserves a Session slot before `createSession()`. Failed Session creation
+releases it immediately; heartbeat renews it; leave and stale cleanup release it. Short expiry
+contains crashed clients. LiveKit participants are not counted. Session caps are resource/abuse
+containment, while pull leases and projected egress remain the financial admission mechanism.
 
 Cloudflare Workers Rate Limiting bindings apply a generous coarse IP join limit before capability
 issuance and a capability-keyed control limit afterwards. These limits cover only control requests;
@@ -137,13 +170,21 @@ Production-like CORS requires exact comma-separated `ALLOWED_ORIGINS`; wildcard/
 are not accepted when Cloudflare is enabled. CORS is only a browser policy and never substitutes for
 capability authentication.
 
+With `ENVIRONMENT=production` and Cloudflare enabled, startup requests fail closed unless exact
+origins, Realtime credentials, explicit accounting bitrate, soft/hard budgets, pull and Session
+caps, 30–45 second lease duration, billing-cycle identity/start, a high-entropy admin secret,
+disabled client override, and required Turnstile settings are all intentional. Development defaults
+are not silently promoted into a production deployment.
+
 ## Human-verification boundary
 
 Capability issuance accepts an optional Turnstile token. When `REQUIRE_TURNSTILE=true`, a missing
-secret, missing token, failed Siteverify request, or invalid token fails closed. Siteverify is called
-server-side only. Local development may leave Turnstile optional. The CF0 UI does not yet embed a
-widget; a future Managed, `interaction-only` widget should run once before anonymous capability
-issuance, not before every media action.
+secret, expected-hostname list, expected action, token, failed Siteverify request, or invalid token
+fails closed. A successful Siteverify response must match `TURNSTILE_EXPECTED_HOSTNAMES` and the
+dedicated `TURNSTILE_EXPECTED_ACTION=xama-media-join`. Siteverify is called server-side only. Local
+development may leave Turnstile optional and should use a separate development widget. The CF0 UI
+does not yet embed a widget; a future Managed, `interaction-only` widget should run once before
+anonymous capability issuance, not before every media action.
 
 ## Billing reconciliation
 

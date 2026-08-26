@@ -13,6 +13,7 @@ export type RealtimeParticipantState = Readonly<{
   id: string;
   name: string;
   realtimeSessionId: string | null;
+  sessionSlotId?: string | null;
   capabilityHash: string;
   capabilityExpiresAt: number;
   allowedOperations: readonly ParticipantOperation[];
@@ -63,7 +64,10 @@ export class RealtimeRoomState {
     this.roomId = roomId;
     this.assignedProvider = stored?.provider ?? null;
     stored?.participants.forEach((participant) =>
-      this.participants.set(participant.id, participant),
+      this.participants.set(participant.id, {
+        ...participant,
+        sessionSlotId: participant.sessionSlotId ?? null,
+      }),
     );
     stored?.screenShares.forEach((screenShare) =>
       this.screenShares.set(screenShare.id, screenShare),
@@ -130,6 +134,13 @@ export class RealtimeRoomState {
     return this.screenShares.get(id);
   }
 
+  getSubscription(
+    participantId: string,
+    screenShareId: string,
+  ): RealtimeSubscriptionState | undefined {
+    return this.participants.get(participantId)?.subscriptions[screenShareId];
+  }
+
   getParticipantScreenShareCount(participantId: string): number {
     return [...this.screenShares.values()].filter(
       (screenShare) => screenShare.ownerParticipantId === participantId,
@@ -167,6 +178,9 @@ export class RealtimeRoomState {
     const participant = this.participants.get(participantId);
     if (!participant || !this.screenShares.has(screenShareId)) {
       throw new Error('The participant or screen share no longer exists.');
+    }
+    if (participant.subscriptions[screenShareId]) {
+      throw new Error('The participant already has this screen-share subscription.');
     }
     this.participants.set(participantId, {
       ...participant,

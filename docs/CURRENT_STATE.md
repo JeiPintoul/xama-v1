@@ -7,8 +7,12 @@ Last updated: 2026-08-25
 Active implementation branch:
 
 ```text
-alpha/screen-share
+spike/cloudflare-realtime
 ```
+
+This active infrastructure work is isolated from production. `main` remains on the validated
+LiveKit Quick Share implementation; the Cloudflare Realtime App and its control plane are not part
+of the production path.
 
 The LiveKit media core is working and has been validated in real rooms: realtime presence, multiple simultaneous screen shares, screen-share audio, Grid, Focus, browser fullscreen, independent per-share volume, desktop viewing, and mobile viewing.
 
@@ -22,7 +26,7 @@ The existing full Xama application shell, communities, channels, adaptive naviga
 
 ## Isolated Cloudflare Realtime Spike
 
-The `spike/cloudflare-realtime` branch contains CF0 and CF0.1 infrastructure only. Production on
+The `spike/cloudflare-realtime` branch contains CF0 through CF0.1.1 infrastructure only. Production on
 `main` remains on the validated LiveKit Quick Share path.
 
 CF0 proves one Cloudflare screen publisher, discovery without automatic receipt, and one explicit
@@ -30,7 +34,10 @@ remote pull through a Worker plus room Durable Object. CF0.1 adds server-generat
 capabilities, a strongly consistent singleton Spend Guard Durable Object, short-lived pull leases,
 soft/hard/emergency budget states, explicit billing-cycle reset, server resource caps, Worker
 control-plane rate limiting, strict origin configuration, an optional server-verified Turnstile
-boundary, and an authenticated backend kill switch.
+boundary, and an authenticated backend kill switch. CF0.1.1 hardens the one-pull/one-lease invariant,
+reserves worst-case exposure before admission, retains accounting through failed provider closure,
+adds a strongly consistent global Cloudflare Session cap, validates production configuration
+fail-closed, and verifies Turnstile hostname/action during capability issuance.
 
 Spend Guard estimates authorized pull egress pessimistically from lease duration at a configured
 accounting envelope; it is not byte-exact Cloudflare billing and does not claim a provider-native
@@ -76,4 +83,8 @@ Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel h
 
 ## Next Action
 
-Validate QSB1.4 over HTTPS with three participants and two simultaneous publishers: watch both shares, set independent volume/mute, Focus and unfocus one, then stop one while the other remains subscribed and playing. Recheck 2560×1440, 1920×1080, approximately 1536×864, and 390×844.
+Validate the CF0.1.1 cost-control paths without production credentials or meaningful media traffic,
+then perform the real A/B selective-subscription and emergency-stop check using only the development
+Realtime App. CF0.2 push coordination and bandwidth-efficiency work starts only after that financial
+safety validation. The separate QSB1.4 LiveKit HTTPS validation remains applicable to the production
+media path, but it is not the active infrastructure branch's next action.

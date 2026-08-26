@@ -7,6 +7,7 @@ import {
 } from './cloudflare-realtime-gateway';
 import {
   getResourceLimits,
+  getProductionConfigurationIssues,
   getRoutingSignals,
   isClientProviderOverrideAllowed,
   parseBoolean,
@@ -36,12 +37,15 @@ import {
 import {
   SpendGuard,
   SpendGuardRequestError,
+  acquireCloudflareSessionSlot,
   acquirePullLease,
-  admitCloudflareSession,
   callSpendGuardAdmin,
   enforcePullLeases,
   getSpendGuardStatus,
+  markPullLeaseClosing,
+  releaseCloudflareSessionSlot,
   releasePullLease,
+  renewCloudflareSessionSlot,
   renewPullLeases,
 } from './spend-guard';
 import { verifyCapabilityIssuance } from './turnstile';
@@ -62,6 +66,14 @@ const participantIdleMilliseconds = 30_000;
 const capabilityLifetimeMilliseconds = 60_000;
 const activeAlarmMilliseconds = 15_000;
 const emptyRoomLifetimeMilliseconds = 10 * 60_000;
+
+type PendingProviderClosure = Readonly<{
+  sessionId: string;
+  mid: string | null;
+  leaseId?: string;
+  failureCount: number;
+  lastFailureAt?: number;
+}>;
 
 class ApplicationError extends Error {
   constructor(
@@ -138,19 +150,6 @@ function configuredOrigins(env: Env): readonly string[] {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0 && origin !== '*');
-}
-
-function validateCorsConfiguration(env: Env): ApplicationError | null {
-  const development = env.ENVIRONMENT === 'development';
-  const cloudflareEnabled = parseBoolean(env.CLOUDFLARE_ENABLED, true);
-  if (!development && cloudflareEnabled && configuredOrigins(env).length === 0) {
-    return new ApplicationError(
-      503,
-      'cors-not-configured',
-      'Realtime access is unavailable because allowed origins are not configured.',
-    );
-  }
-  return null;
 }
 
 function isOriginAllowed(request: Request, env: Env): boolean {
@@ -272,7 +271,7 @@ async function applyControlPlaneRateLimit(
 
 export class RoomCoordinator {
   private room: RealtimeRoomState | null = null;
-  private pendingClosures: ProviderTrackClosure[] = [];
+  private pendingClosures: PendingProviderClosure[] = [];
   private readonly ready: Promise<void>;
 
   constructor(
@@ -282,10 +281,13 @@ export class RoomCoordinator {
     this.ready = state.blockConcurrencyWhile(async () => {
       const [storedRoom, storedClosures] = await Promise.all([
         state.storage.get<StoredRealtimeRoom>(roomStorageKey),
-        state.storage.get<readonly ProviderTrackClosure[]>(pendingClosuresStorageKey),
+        state.storage.get<readonly PendingProviderClosure[]>(pendingClosuresStorageKey),
       ]);
       if (storedRoom) this.room = new RealtimeRoomState(storedRoom.roomId, storedRoom);
-      this.pendingClosures = [...(storedClosures ?? [])];
+      this.pendingClosures = (storedClosures ?? []).map((closure) => ({
+        ...closure,
+        failureCount: closure.failureCount ?? 0,
+      }));
     });
   }
 
@@ -407,17 +409,24 @@ export class RoomCoordinator {
 
     const participantId = crypto.randomUUID();
     let realtimeSessionId: string | null = null;
+    let sessionSlotId: string | null = null;
     if (selection.provider === 'cloudflare') {
       this.requireCloudflareEnabled();
-      const admission = await admitCloudflareSession(this.env);
-      if (!admission.allowed) {
+      const slot = await acquireCloudflareSessionSlot(this.env, roomId, participantId);
+      if (!slot.allowed) {
         throw new ApplicationError(
-          503,
+          slot.reason === 'global-session-cap' ? 429 : 503,
           'media-budget-unavailable',
           'Media admission is disabled by budget controls.',
         );
       }
-      realtimeSessionId = await this.getGateway().createSession(`${roomId}:${participantId}`);
+      sessionSlotId = slot.sessionSlotId;
+      try {
+        realtimeSessionId = await this.getGateway().createSession(`${roomId}:${participantId}`);
+      } catch (error) {
+        await releaseCloudflareSessionSlot(this.env, sessionSlotId).catch(() => undefined);
+        throw error;
+      }
     }
 
     const capability = createOpaqueCapability();
@@ -428,6 +437,7 @@ export class RoomCoordinator {
       id: participantId,
       name: joinRequest.participantName,
       realtimeSessionId,
+      sessionSlotId,
       capabilityHash: await hashSecret(capability),
       capabilityExpiresAt,
       allowedOperations: participantOperations,
@@ -455,6 +465,25 @@ export class RoomCoordinator {
     const now = Date.now();
     const capabilityExpiresAt = now + capabilityLifetimeMilliseconds;
     const leaseIds = room.getParticipantLeaseIds(participant.id);
+    if (room.provider === 'cloudflare') {
+      const sessionSlotId = participant.sessionSlotId;
+      const sessionRenewal = sessionSlotId
+        ? await renewCloudflareSessionSlot(
+            this.env,
+            sessionSlotId,
+            roomId,
+            participant.id,
+          ).catch(() => ({ renewed: false as const }))
+        : { renewed: false as const };
+      if (!sessionRenewal.renewed) {
+        await this.removeParticipant(participant.id);
+        throw new ApplicationError(
+          503,
+          'media-capacity',
+          'The Cloudflare media session authorization expired.',
+        );
+      }
+    }
     if (room.provider === 'cloudflare' && leaseIds.length > 0) {
       let revokedLeaseIds: readonly string[];
       try {
@@ -555,7 +584,15 @@ export class RoomCoordinator {
         'A participant cannot pull its own screen share.',
       );
     }
+    if (room.getSubscription(participant.id, screenShare.id)) {
+      throw new ApplicationError(
+        409,
+        'subscription-active',
+        'The participant is already subscribed to this screen share.',
+      );
+    }
     this.requireCloudflareEnabled();
+    const gateway = this.getGateway();
     const limits = getResourceLimits(this.env);
     throwLimitViolation(getPullLimitViolation(room, participant.id, limits));
 
@@ -565,6 +602,13 @@ export class RoomCoordinator {
       screenShareId: screenShare.id,
     });
     if (!lease.allowed) {
+      if (lease.reason === 'already-active') {
+        throw new ApplicationError(
+          409,
+          'subscription-active',
+          'The participant already has an authorized pull for this screen share.',
+        );
+      }
       const status = lease.reason === 'global-pull-cap' ? 429 : 503;
       throw new ApplicationError(
         status,
@@ -573,13 +617,17 @@ export class RoomCoordinator {
       );
     }
 
+    let providerCallStarted = false;
+    let providerMid: string | null = null;
     try {
-      const response = await this.getGateway().pullTrack(
+      providerCallStarted = true;
+      const response = await gateway.pullTrack(
         participant.realtimeSessionId,
         screenShare.realtimeSessionId,
         screenShare.providerTrackName,
       );
       const remoteTrack = response.tracks[0];
+      providerMid = remoteTrack?.mid ?? null;
       if (response.sessionDescription?.type !== 'offer' || !remoteTrack?.mid) {
         throw new Error('Cloudflare Realtime did not offer the requested track.');
       }
@@ -595,7 +643,20 @@ export class RoomCoordinator {
         requiresImmediateRenegotiation: response.requiresImmediateRenegotiation ?? true,
       });
     } catch (error) {
-      await releasePullLease(this.env, lease.leaseId).catch(() => undefined);
+      if (!providerCallStarted) {
+        await releasePullLease(this.env, lease.leaseId).catch(() => undefined);
+      } else {
+        room.removeSubscription(participant.id, screenShare.id);
+        await this.persistRoom().catch(() => undefined);
+        await this.closePendingProviderTracks([
+          {
+            sessionId: participant.realtimeSessionId,
+            mid: providerMid,
+            leaseId: lease.leaseId,
+            failureCount: 0,
+          },
+        ]);
+      }
       throw error;
     }
   }
@@ -728,29 +789,66 @@ export class RoomCoordinator {
 
   private async removeParticipant(participantId: string): Promise<void> {
     if (!this.room) return;
+    const sessionSlotId = this.room.getParticipant(participantId)?.sessionSlotId;
     const closures = this.room.removeParticipant(participantId);
     await this.persistRoom();
-    if (this.room.provider === 'cloudflare') await this.closeProviderTracks(closures);
+    if (this.room.provider === 'cloudflare') {
+      try {
+        await this.closeProviderTracks(closures);
+      } finally {
+        if (sessionSlotId) {
+          await releaseCloudflareSessionSlot(this.env, sessionSlotId).catch(() => undefined);
+        }
+      }
+    }
   }
 
   private async closeProviderTracks(
     closures: readonly ProviderTrackClosure[],
   ): Promise<CloudflareTracksResponse | undefined> {
+    return this.closePendingProviderTracks(
+      closures.map((closure) => ({ ...closure, failureCount: 0 })),
+    );
+  }
+
+  private async closePendingProviderTracks(
+    closures: readonly PendingProviderClosure[],
+  ): Promise<CloudflareTracksResponse | undefined> {
     for (const closure of closures) {
       if (
         !this.pendingClosures.some(
-          (pending) => pending.sessionId === closure.sessionId && pending.mid === closure.mid,
+          (pending) =>
+            pending.sessionId === closure.sessionId &&
+            pending.mid === closure.mid &&
+            pending.leaseId === closure.leaseId,
         )
       ) {
         this.pendingClosures.push(closure);
       }
     }
     await this.persistClosures();
+    await Promise.all(
+      closures
+        .flatMap((closure) => (closure.leaseId ? [closure.leaseId] : []))
+        .map((leaseId) => markPullLeaseClosing(this.env, leaseId).catch(() => undefined)),
+    );
     if (this.pendingClosures.length === 0) return undefined;
 
-    const gateway = this.getGateway();
+    let gateway: CloudflareRealtimeGateway;
+    try {
+      gateway = this.getGateway();
+    } catch {
+      this.recordProviderClosureFailures(this.pendingClosures);
+      await this.persistClosures();
+      await this.scheduleAlarm();
+      return undefined;
+    }
     let requestedResponse: CloudflareTracksResponse | undefined;
     for (const closure of [...this.pendingClosures]) {
+      if (!closure.mid) {
+        this.recordProviderClosureFailures([closure]);
+        continue;
+      }
       try {
         const response = await gateway.closeTrack(closure.sessionId, closure.mid);
         if (
@@ -763,14 +861,41 @@ export class RoomCoordinator {
         }
         if (closure.leaseId) await releasePullLease(this.env, closure.leaseId);
         this.pendingClosures = this.pendingClosures.filter(
-          (pending) => !(pending.sessionId === closure.sessionId && pending.mid === closure.mid),
+          (pending) =>
+            !(
+              pending.sessionId === closure.sessionId &&
+              pending.mid === closure.mid &&
+              pending.leaseId === closure.leaseId
+            ),
         );
       } catch {
-        continue;
+        this.recordProviderClosureFailures([closure]);
       }
     }
     await this.persistClosures();
+    if (this.pendingClosures.length > 0) await this.scheduleAlarm();
     return requestedResponse;
+  }
+
+  private recordProviderClosureFailures(closures: readonly PendingProviderClosure[]): void {
+    const now = Date.now();
+    for (const closure of closures) {
+      this.pendingClosures = this.pendingClosures.map((pending) =>
+        pending.sessionId === closure.sessionId &&
+        pending.mid === closure.mid &&
+        pending.leaseId === closure.leaseId
+          ? { ...pending, failureCount: pending.failureCount + 1, lastFailureAt: now }
+          : pending,
+      );
+      console.warn(
+        JSON.stringify({
+          event: 'cloudflare_provider_track_close_pending',
+          failureCount: closure.failureCount + 1,
+          pendingProviderClosureCount: this.pendingClosures.length,
+          providerTrackKnown: closure.mid !== null,
+        }),
+      );
+    }
   }
 
   private async persistRoom(): Promise<void> {
@@ -800,8 +925,20 @@ export default {
       const path = new URL(request.url).pathname;
       if (path.startsWith('/admin/spend-guard')) return await handleAdminRequest(request, env);
 
-      const corsError = validateCorsConfiguration(env);
-      if (corsError) throw corsError;
+      const configurationIssues = getProductionConfigurationIssues(env);
+      if (configurationIssues.length > 0) {
+        console.error(
+          JSON.stringify({
+            event: 'cloudflare_realtime_configuration_invalid',
+            issues: configurationIssues,
+          }),
+        );
+        throw new ApplicationError(
+          503,
+          'realtime-configuration-invalid',
+          'Cloudflare Realtime production configuration is incomplete.',
+        );
+      }
       if (!isOriginAllowed(request, env)) {
         throw new ApplicationError(403, 'origin-not-allowed', 'This origin is not allowed.');
       }
