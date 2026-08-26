@@ -138,6 +138,18 @@ async function readJson(request: Request): Promise<unknown> {
   }
 }
 
+async function bufferIncomingRequest(request: Request): Promise<Request> {
+  if (!request.body) return request;
+
+  const body = await request.arrayBuffer();
+
+  return new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body,
+  });
+}
+
 function getRoomRoute(pathname: string): RoomRoute | null {
   const segments = pathname.split('/').filter(Boolean);
   return segments[0] === 'rooms' && isSafeIdentifier(segments[1]) && typeof segments[2] === 'string'
@@ -293,36 +305,37 @@ export class RoomCoordinator {
 
   async fetch(request: Request): Promise<Response> {
     await this.ready;
-    const route = getRoomRoute(new URL(request.url).pathname);
+    const bufferedRequest = await bufferIncomingRequest(request);
+    const route = getRoomRoute(new URL(bufferedRequest.url).pathname);
     if (!route) return json({ error: 'Invalid room.' }, 400);
 
     try {
-      if (request.method === 'POST' && route.action === 'join') {
-        return await this.join(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'join') {
+        return await this.join(route.roomId, bufferedRequest);
       }
-      if (request.method === 'GET' && route.action === 'state') {
-        return await this.getRoom(route.roomId, request);
+      if (bufferedRequest.method === 'GET' && route.action === 'state') {
+        return await this.getRoom(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'heartbeat') {
-        return await this.heartbeat(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'heartbeat') {
+        return await this.heartbeat(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'publish') {
-        return await this.publish(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'publish') {
+        return await this.publish(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'stop-publishing') {
-        return await this.stopPublishing(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'stop-publishing') {
+        return await this.stopPublishing(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'subscribe') {
-        return await this.subscribe(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'subscribe') {
+        return await this.subscribe(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'unsubscribe') {
-        return await this.unsubscribe(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'unsubscribe') {
+        return await this.unsubscribe(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'renegotiate') {
-        return await this.renegotiate(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'renegotiate') {
+        return await this.renegotiate(route.roomId, bufferedRequest);
       }
-      if (request.method === 'POST' && route.action === 'leave') {
-        return await this.leave(route.roomId, request);
+      if (bufferedRequest.method === 'POST' && route.action === 'leave') {
+        return await this.leave(route.roomId, bufferedRequest);
       }
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
@@ -519,24 +532,37 @@ export class RoomCoordinator {
     }
 
     const screenShareId = crypto.randomUUID();
-    const providerTrackName = `screen-${participant.id}-${screenShareId}`;
+
     const response = await this.getGateway().publishTrack(
       participant.realtimeSessionId,
       payload.sessionDescription,
-      payload.mid,
-      providerTrackName,
     );
+
     if (response.sessionDescription?.type !== 'answer') {
       throw new Error('Cloudflare Realtime did not answer the publish offer.');
     }
+
+    const publishedTrack =
+      response.tracks.find(
+        (track) => track.mid === payload.mid && typeof track.trackName === 'string',
+      ) ??
+      response.tracks.find(
+        (track) => typeof track.trackName === 'string',
+      );
+
+    if (!publishedTrack?.trackName) {
+      throw new Error('Cloudflare Realtime did not return the published track.');
+    }
+
     room.addScreenShare({
-      id: screenShareId,
-      ownerParticipantId: participant.id,
-      ownerName: participant.name,
-      realtimeSessionId: participant.realtimeSessionId,
-      providerTrackName,
-      publisherMid: payload.mid,
-    });
+    id: screenShareId,
+    ownerParticipantId: participant.id,
+    ownerName: participant.name,
+    realtimeSessionId: participant.realtimeSessionId,
+    providerTrackName: publishedTrack.trackName,
+    publisherMid: publishedTrack.mid ?? payload.mid,
+  });
+  
     await this.persistRoom();
     return json({ screenShareId, sessionDescription: response.sessionDescription });
   }

@@ -85,16 +85,17 @@ export class CloudflareRealtimeGateway {
   private readonly baseUrl: string;
 
   constructor({
-    appId,
-    appSecret,
-    fetchImplementation = fetch,
-    baseUrl = 'https://rtc.live.cloudflare.com/v1',
-  }: GatewayConfiguration) {
-    this.appId = appId;
-    this.appSecret = appSecret;
-    this.fetchImplementation = fetchImplementation;
-    this.baseUrl = baseUrl;
-  }
+  appId,
+  appSecret,
+  fetchImplementation,
+  baseUrl = 'https://rtc.live.cloudflare.com/v1',
+}: GatewayConfiguration) {
+  this.appId = appId;
+  this.appSecret = appSecret;
+  this.fetchImplementation =
+    fetchImplementation ?? ((input, init) => fetch(input, init));
+  this.baseUrl = baseUrl;
+}
 
   async createSession(correlationId: string): Promise<string> {
     const payload = await this.request(
@@ -110,16 +111,14 @@ export class CloudflareRealtimeGateway {
   }
 
   async publishTrack(
-    sessionId: string,
-    sessionDescription: CloudflareSessionDescription,
-    mid: string,
-    trackName: string,
-  ): Promise<CloudflareTracksResponse> {
-    return this.trackRequest(sessionId, '/tracks/new', 'POST', {
-      sessionDescription,
-      tracks: [{ location: 'local', mid, trackName }],
-    });
-  }
+  sessionId: string,
+  sessionDescription: CloudflareSessionDescription,
+): Promise<CloudflareTracksResponse> {
+  return this.trackRequest(sessionId, '/tracks/new', 'POST', {
+    sessionDescription,
+    autoDiscover: true,
+  });
+}
 
   async pullTrack(
     targetSessionId: string,
@@ -158,7 +157,11 @@ export class CloudflareRealtimeGateway {
     );
   }
 
-  private async request(path: string, method: 'POST' | 'PUT', body?: unknown): Promise<unknown> {
+  private async request(
+    path: string,
+    method: 'POST' | 'PUT',
+    body?: unknown,
+  ): Promise<unknown> {
     const response = await this.fetchImplementation(
       `${this.baseUrl}/apps/${encodeURIComponent(this.appId)}${path}`,
       {
@@ -171,19 +174,46 @@ export class CloudflareRealtimeGateway {
       },
     );
 
-    let payload: unknown;
+    let payload: unknown = null;
+
     try {
       payload = await response.json();
     } catch {
-      throw new Error(`Cloudflare Realtime returned HTTP ${response.status}.`);
+      // handled below
     }
+
     if (!response.ok) {
+      const providerCode =
+        isRecord(payload) && typeof payload.errorCode === 'string'
+          ? payload.errorCode
+          : undefined;
+
+      const providerDescription =
+        isRecord(payload) && typeof payload.errorDescription === 'string'
+          ? payload.errorDescription
+          : undefined;
+
+      console.error(
+        JSON.stringify({
+          event: 'cloudflare_realtime_request_failed',
+          method,
+          path,
+          status: response.status,
+          providerCode,
+          providerDescription,
+        }),
+      );
+
       throw new Error(
-        `Cloudflare Realtime returned HTTP ${response.status}${
-          getProviderError(payload) ? ` (${getProviderError(payload)})` : ''
-        }.`,
+        `Cloudflare Realtime returned HTTP ${response.status}` +
+          (providerCode ? ` (${providerCode})` : ''),
       );
     }
+
+    if (payload === null) {
+      throw new Error(`Cloudflare Realtime returned HTTP ${response.status} without JSON.`);
+    }
+
     return payload;
   }
 }

@@ -227,7 +227,9 @@ export class CloudflareScreenShareSession implements BrowserMediaSession {
       });
       await this.pollRoom();
       this.setSnapshot({ ...this.snapshot, screenShareOperation: 'idle', screenShareError: null });
-    } catch {
+    } catch (error) {
+      console.error('[CF0] screen-share publish failed', error);
+
       if (this.localScreenShareId) {
         await this.client
           .stopPublishing(roomId, capability, this.localScreenShareId)

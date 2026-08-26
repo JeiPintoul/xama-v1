@@ -78,10 +78,11 @@ export class CloudflareRealtimeClient {
   private readonly endpoint: string;
   private readonly fetchImplementation: FetchImplementation;
 
-  constructor(endpoint: string, fetchImplementation: FetchImplementation = fetch) {
-    this.endpoint = endpoint.replace(/\/$/, '');
-    this.fetchImplementation = fetchImplementation;
-  }
+  constructor(endpoint: string, fetchImplementation?: FetchImplementation) {
+  this.endpoint = endpoint.replace(/\/$/, '');
+  this.fetchImplementation =
+    fetchImplementation ?? ((input, init) => fetch(input, init));
+}
 
   async join(
     roomId: string,
@@ -119,8 +120,8 @@ export class CloudflareRealtimeClient {
   }
 
   async heartbeat(roomId: string, capability: string): Promise<void> {
-    await this.request(roomId, 'heartbeat', {}, 'POST', false, capability);
-  }
+  await this.request(roomId, 'heartbeat', undefined, 'POST', false, capability);
+}
 
   async publish(
     roomId: string,
@@ -196,8 +197,8 @@ export class CloudflareRealtimeClient {
   }
 
   async leave(roomId: string, capability: string): Promise<void> {
-    await this.request(roomId, 'leave', {}, 'POST', true, capability);
-  }
+  await this.request(roomId, 'leave', undefined, 'POST', true, capability);
+}
 
   private async request(
     roomId: string,
