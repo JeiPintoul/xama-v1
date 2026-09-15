@@ -1,6 +1,6 @@
 # Xama — Current Project State
 
-Last updated: 2026-08-25
+Last updated: 2026-09-15
 
 ## Current Stage
 
@@ -37,7 +37,11 @@ control-plane rate limiting, strict origin configuration, an optional server-ver
 boundary, and an authenticated backend kill switch. CF0.1.1 hardens the one-pull/one-lease invariant,
 reserves worst-case exposure before admission, retains accounting through failed provider closure,
 adds a strongly consistent global Cloudflare Session cap, validates production configuration
-fail-closed, and verifies Turnstile hostname/action during capability issuance.
+fail-closed, and verifies Turnstile hostname/action during capability issuance. Provider pull closure
+is now durably idempotent: a confirmed close or an authoritative Session-state check proving that the
+Session/target track is already absent completes the closure, while timeouts, 5xx responses, malformed
+responses, network failures, and otherwise ambiguous provider state retain the closing lease for the
+existing alarm retry path.
 
 Spend Guard estimates authorized pull egress pessimistically from lease duration at a configured
 accounting envelope; it is not byte-exact Cloudflare billing and does not claim a provider-native
@@ -83,8 +87,11 @@ Do not expose credentials or commit a user-local Quick Tunnel hostname. Tunnel h
 
 ## Next Action
 
-Validate the CF0.1.1 cost-control paths without production credentials or meaningful media traffic,
-then perform the real A/B selective-subscription and emergency-stop check using only the development
-Realtime App. CF0.2 push coordination and bandwidth-efficiency work starts only after that financial
-safety validation. The separate QSB1.4 LiveKit HTTPS validation remains applicable to the production
-media path, but it is not the active infrastructure branch's next action.
+Re-run the real abrupt-viewer lifecycle test against only the development Realtime App and confirm
+that stale cleanup converges from one closing pull to zero pulls/zero closing leases. Also perform the
+real A/B selective-subscription and emergency-stop check there. Local tests cover successful close,
+confirmed provider absence, ambiguous retry, and the provider-close/lease-release partial failure, but
+do not replace that real browser/provider validation. CF0.2 push coordination and bandwidth-efficiency
+work starts only after this financial safety validation. The separate QSB1.4 LiveKit HTTPS validation
+remains applicable to the production media path, but it is not the active infrastructure branch's next
+action.

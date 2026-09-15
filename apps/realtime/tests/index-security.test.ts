@@ -130,21 +130,27 @@ function authorizedRoomRequest(action: string, capability: string, body: unknown
   return request;
 }
 
-function createLogicalLeaseSpendGuard(): {
+function createLogicalLeaseSpendGuard(initialLeaseActive = false): {
   fetch: (request: Request) => Promise<Response>;
   paths: string[];
+  isLeaseActive: () => boolean;
 } {
-  let leaseActive = false;
+  let leaseActive = initialLeaseActive;
   const paths: string[] = [];
   return {
     paths,
+    isLeaseActive: () => leaseActive,
     fetch: async (request) => {
       const path = new URL(request.url).pathname;
       paths.push(path);
       if (path === '/leases/acquire') {
         if (leaseActive) return Response.json({ allowed: false, reason: 'already-active' });
         leaseActive = true;
-        return Response.json({ allowed: true, leaseId: 'lease-one', expiresAt: Date.now() + 40_000 });
+        return Response.json({
+          allowed: true,
+          leaseId: 'lease-one',
+          expiresAt: Date.now() + 40_000,
+        });
       }
       if (path === '/leases/release') leaseActive = false;
       return Response.json({ marked: true, released: true });
@@ -234,6 +240,7 @@ describe('RoomCoordinator capability authorization', () => {
     );
     const persisted = memory.values.get('room') as StoredRealtimeRoom;
     expect(persisted.participants[0]?.subscriptions).toEqual({});
+    expect(memory.values.has('pending-provider-closures')).toBe(false);
     expect(spendFetch).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://spend-guard.internal/leases/release' }),
     );
@@ -303,11 +310,13 @@ describe('RoomCoordinator pull accounting invariant', () => {
     expect(spend.paths).toEqual(
       expect.arrayContaining(['/leases/acquire', '/leases/closing', '/leases/release']),
     );
+    expect(spend.isLeaseActive()).toBe(false);
     expect(memory.values.has('pending-provider-closures')).toBe(false);
   });
 
   it('retains durable closure and accounting responsibility when provider close fails', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const capability = 'a'.repeat(43);
     const memory = createMemoryStorage(await createStoredRoom(capability, true), [], {
       failRoomPuts: 1,
@@ -335,6 +344,7 @@ describe('RoomCoordinator pull accounting invariant', () => {
 
     expect(response.status).toBe(502);
     expect(spend.paths).not.toContain('/leases/release');
+    expect(spend.isLeaseActive()).toBe(true);
     expect(memory.values.get('pending-provider-closures')).toEqual([
       expect.objectContaining({ mid: 'remote-mid', leaseId: 'lease-one', failureCount: 1 }),
     ]);
@@ -343,6 +353,93 @@ describe('RoomCoordinator pull accounting invariant', () => {
     await coordinator.alarm();
 
     expect(spend.paths).toContain('/leases/release');
+    expect(spend.isLeaseActive()).toBe(false);
+    expect(memory.values.has('pending-provider-closures')).toBe(false);
+  });
+
+  it('releases accounting when reconciliation confirms the provider Session is gone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const memory = createMemoryStorage(await createStoredRoom(), [
+      { sessionId: 'session-one', mid: 'remote-mid', leaseId: 'lease-one' },
+    ]);
+    const spend = createLogicalLeaseSpendGuard(true);
+    const gatewayFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ errorCode: 'not_found' }, { status: 404 }));
+    vi.stubGlobal('fetch', gatewayFetch);
+    const coordinator = new RoomCoordinator(memory.state, createEnv(spend.fetch));
+
+    await coordinator.alarm();
+
+    expect(gatewayFetch).toHaveBeenCalledTimes(2);
+    expect(gatewayFetch.mock.calls[1]?.[1]).toMatchObject({ method: 'GET' });
+    expect(spend.paths).toContain('/leases/release');
+    expect(spend.isLeaseActive()).toBe(false);
+    expect(memory.values.has('pending-provider-closures')).toBe(false);
+  });
+
+  it('releases accounting when reconciliation confirms the provider track is gone', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const memory = createMemoryStorage(await createStoredRoom(), [
+      { sessionId: 'session-one', mid: 'remote-mid', leaseId: 'lease-one' },
+    ]);
+    const spend = createLogicalLeaseSpendGuard(true);
+    const gatewayFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ tracks: [{ mid: 'remote-mid', errorCode: 'track_not_found' }] }),
+      )
+      .mockResolvedValueOnce(Response.json({ tracks: [{ mid: 'other-mid', status: 'active' }] }));
+    vi.stubGlobal('fetch', gatewayFetch);
+    const coordinator = new RoomCoordinator(memory.state, createEnv(spend.fetch));
+
+    await coordinator.alarm();
+
+    expect(spend.paths).toContain('/leases/release');
+    expect(spend.isLeaseActive()).toBe(false);
+    expect(memory.values.has('pending-provider-closures')).toBe(false);
+  });
+
+  it('recovers when provider close succeeds before SpendGuard lease release fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const memory = createMemoryStorage(await createStoredRoom(), [
+      { sessionId: 'session-one', mid: 'remote-mid', leaseId: 'lease-one' },
+    ]);
+    let releaseAttempts = 0;
+    let leaseActive = true;
+    const spendPaths: string[] = [];
+    const spendFetch = async (request: Request): Promise<Response> => {
+      const path = new URL(request.url).pathname;
+      spendPaths.push(path);
+      if (path === '/leases/release' && releaseAttempts++ === 0) {
+        return Response.json({ error: 'temporary SpendGuard failure' }, { status: 503 });
+      }
+      if (path === '/leases/release') leaseActive = false;
+      return Response.json({ marked: true, released: true });
+    };
+    const gatewayFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ tracks: [{ mid: 'remote-mid' }] }))
+      .mockResolvedValueOnce(
+        Response.json({ tracks: [{ mid: 'remote-mid', errorCode: 'track_not_found' }] }),
+      )
+      .mockResolvedValueOnce(Response.json({ tracks: [] }));
+    vi.stubGlobal('fetch', gatewayFetch);
+    const coordinator = new RoomCoordinator(memory.state, createEnv(spendFetch));
+
+    await coordinator.alarm();
+
+    expect(memory.values.get('pending-provider-closures')).toEqual([
+      expect.objectContaining({ leaseId: 'lease-one', failureCount: 1 }),
+    ]);
+    expect(leaseActive).toBe(true);
+
+    await coordinator.alarm();
+
+    expect(spendPaths.filter((path) => path === '/leases/release')).toHaveLength(2);
+    expect(leaseActive).toBe(false);
     expect(memory.values.has('pending-provider-closures')).toBe(false);
   });
 });
@@ -367,9 +464,9 @@ describe('Cloudflare session slot lifecycle', () => {
     };
     vi.stubGlobal(
       'fetch',
-      vi.fn<typeof fetch>().mockResolvedValue(
-        Response.json({ errorCode: 'session-failed' }, { status: 503 }),
-      ),
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(Response.json({ errorCode: 'session-failed' }, { status: 503 })),
     );
     const coordinator = new RoomCoordinator(memory.state, env);
 
@@ -393,11 +490,9 @@ describe('Cloudflare session slot lifecycle', () => {
       }),
     );
 
-    expect(
-      (
-        await leaveCoordinator.fetch(authorizedRoomRequest('leave', capability))
-      ).status,
-    ).toBe(200);
+    expect((await leaveCoordinator.fetch(authorizedRoomRequest('leave', capability))).status).toBe(
+      200,
+    );
     expect(leavePaths).toContain('/sessions/release');
 
     const staleRoom: StoredRealtimeRoom = {

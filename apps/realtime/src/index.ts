@@ -481,12 +481,9 @@ export class RoomCoordinator {
     if (room.provider === 'cloudflare') {
       const sessionSlotId = participant.sessionSlotId;
       const sessionRenewal = sessionSlotId
-        ? await renewCloudflareSessionSlot(
-            this.env,
-            sessionSlotId,
-            roomId,
-            participant.id,
-          ).catch(() => ({ renewed: false as const }))
+        ? await renewCloudflareSessionSlot(this.env, sessionSlotId, roomId, participant.id).catch(
+            () => ({ renewed: false as const }),
+          )
         : { renewed: false as const };
       if (!sessionRenewal.renewed) {
         await this.removeParticipant(participant.id);
@@ -545,24 +542,21 @@ export class RoomCoordinator {
     const publishedTrack =
       response.tracks.find(
         (track) => track.mid === payload.mid && typeof track.trackName === 'string',
-      ) ??
-      response.tracks.find(
-        (track) => typeof track.trackName === 'string',
-      );
+      ) ?? response.tracks.find((track) => typeof track.trackName === 'string');
 
     if (!publishedTrack?.trackName) {
       throw new Error('Cloudflare Realtime did not return the published track.');
     }
 
     room.addScreenShare({
-    id: screenShareId,
-    ownerParticipantId: participant.id,
-    ownerName: participant.name,
-    realtimeSessionId: participant.realtimeSessionId,
-    providerTrackName: publishedTrack.trackName,
-    publisherMid: publishedTrack.mid ?? payload.mid,
-  });
-  
+      id: screenShareId,
+      ownerParticipantId: participant.id,
+      ownerName: participant.name,
+      realtimeSessionId: participant.realtimeSessionId,
+      providerTrackName: publishedTrack.trackName,
+      publisherMid: publishedTrack.mid ?? payload.mid,
+    });
+
     await this.persistRoom();
     return json({ screenShareId, sessionDescription: response.sessionDescription });
   }
@@ -876,14 +870,15 @@ export class RoomCoordinator {
         continue;
       }
       try {
-        const response = await gateway.closeTrack(closure.sessionId, closure.mid);
+        const result = await gateway.closeTrackIdempotently(closure.sessionId, closure.mid);
         if (
+          result.status === 'closed' &&
           closures.some(
             (requested) =>
               requested.sessionId === closure.sessionId && requested.mid === closure.mid,
           )
         ) {
-          requestedResponse = response;
+          requestedResponse = result.response;
         }
         if (closure.leaseId) await releasePullLease(this.env, closure.leaseId);
         this.pendingClosures = this.pendingClosures.filter(
@@ -894,6 +889,15 @@ export class RoomCoordinator {
               pending.leaseId === closure.leaseId
             ),
         );
+        if (result.status === 'already-absent') {
+          console.info(
+            JSON.stringify({
+              event: 'cloudflare_provider_track_close_reconciled',
+              providerAbsence: result.absence,
+              pendingProviderClosureCount: this.pendingClosures.length,
+            }),
+          );
+        }
       } catch {
         this.recordProviderClosureFailures([closure]);
       }

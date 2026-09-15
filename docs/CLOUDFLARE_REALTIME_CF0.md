@@ -70,9 +70,16 @@ durable pending-closure state.
 
 Once a provider pull may have been created, its lease is never released first. Later application or
 persistence failure moves the lease to `closing`, durably queues the provider closure, and releases
-accounting only after `tracks/close` succeeds. Unknown/partial provider results retain their lease
-and are retried or surfaced through structured closure-pending logs; the logs contain counts and
-failure state, not capabilities, authorization headers, SDP, Session IDs, or secrets.
+accounting only after `tracks/close` succeeds or Cloudflare authoritatively confirms that no provider
+egress can remain. When `tracks/close` fails, the gateway performs the minimum reconciliation through
+the documented Session-state endpoint: an HTTP 404 from that endpoint, or a valid Session track list
+that does not contain the target `mid`, completes the closure idempotently. A timeout, 5xx, network failure,
+malformed response, provider error without conclusive state, or a Session state that still contains
+the target track keeps the lease accounted and the durable closure pending for the existing alarm
+retry. This also recovers the case where provider close succeeds but local lease release fails: the
+retry observes that the track is already absent, then completes the local release. Structured logs
+contain counts and outcome categories, not capabilities, authorization headers, SDP, Session IDs, or
+secrets.
 
 The default accounting envelope is 12,000,000 bits/second for every authorized remote video pull.
 That value is intentionally above expected 1080p30 delivery and is configured with
@@ -141,7 +148,8 @@ pulls, then reset explicitly.
 Status includes enabled/emergency state, accrued/reserved/projected egress, active and closing pull
 counts, and active Cloudflare Session slots. Repeated provider-close failures emit a structured
 `cloudflare_provider_track_close_pending` log with counts only, so pending closure work is visible
-without disclosing media or authorization identifiers.
+without disclosing media or authorization identifiers. Provider-confirmed idempotent completion emits
+`cloudflare_provider_track_close_reconciled` with only the absence category and remaining pending count.
 
 ## Resource and abuse limits
 
@@ -185,6 +193,11 @@ dedicated `TURNSTILE_EXPECTED_ACTION=xama-media-join`. Siteverify is called serv
 development may leave Turnstile optional and should use a separate development widget. The CF0 UI
 does not yet embed a widget; a future Managed, `interaction-only` widget should run once before
 anonymous capability issuance, not before every media action.
+
+The abrupt-viewer lifecycle still requires a real re-test against the development Realtime App. The
+expected settled Spend Guard state after stale cleanup is one remaining Session, zero pulls, and zero
+closing pulls. Local provider mocks validate the close/reconciliation state machine but cannot prove
+the live provider's observed timing and response behavior.
 
 ## Billing reconciliation
 

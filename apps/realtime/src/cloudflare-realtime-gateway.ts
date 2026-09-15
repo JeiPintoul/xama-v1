@@ -8,6 +8,7 @@ type CloudflareTrack = Readonly<{
   mid?: string;
   sessionId?: string;
   trackName?: string;
+  status?: 'active' | 'inactive' | 'waiting';
   errorCode?: string;
   errorDescription?: string;
 }>;
@@ -17,6 +18,23 @@ export type CloudflareTracksResponse = Readonly<{
   requiresImmediateRenegotiation?: boolean;
   tracks: readonly CloudflareTrack[];
 }>;
+
+export type CloudflareTrackClosureResult =
+  | Readonly<{ status: 'closed'; response: CloudflareTracksResponse }>
+  | Readonly<{ status: 'already-absent'; absence: 'session' | 'track' }>;
+
+type CloudflareRealtimeFailureKind = 'http' | 'provider' | 'invalid-response';
+
+export class CloudflareRealtimeRequestError extends Error {
+  constructor(
+    readonly kind: CloudflareRealtimeFailureKind,
+    message: string,
+    readonly status?: number,
+    readonly providerCode?: string,
+  ) {
+    super(message);
+  }
+}
 
 type FetchImplementation = typeof fetch;
 
@@ -42,30 +60,50 @@ function parseSessionDescription(value: unknown): CloudflareSessionDescription |
   return { type: value.type, sdp: value.sdp };
 }
 
+function invalidResponse(message: string): CloudflareRealtimeRequestError {
+  return new CloudflareRealtimeRequestError('invalid-response', message);
+}
+
+function providerFailure(code: string): CloudflareRealtimeRequestError {
+  return new CloudflareRealtimeRequestError(
+    'provider',
+    `Cloudflare Realtime request failed: ${code}.`,
+    undefined,
+    code,
+  );
+}
+
+function parseTrack(value: unknown): CloudflareTrack {
+  if (!isRecord(value)) throw invalidResponse('Cloudflare Realtime returned an invalid track.');
+  return {
+    location:
+      value.location === 'local' || value.location === 'remote' ? value.location : undefined,
+    mid: typeof value.mid === 'string' ? value.mid : undefined,
+    sessionId: typeof value.sessionId === 'string' ? value.sessionId : undefined,
+    trackName: typeof value.trackName === 'string' ? value.trackName : undefined,
+    status:
+      value.status === 'active' || value.status === 'inactive' || value.status === 'waiting'
+        ? value.status
+        : undefined,
+    errorCode: typeof value.errorCode === 'string' ? value.errorCode : undefined,
+    errorDescription:
+      typeof value.errorDescription === 'string' ? value.errorDescription : undefined,
+  };
+}
+
 function parseTracksResponse(payload: unknown): CloudflareTracksResponse {
-  if (!isRecord(payload)) throw new Error('Cloudflare Realtime returned an invalid response.');
+  if (!isRecord(payload))
+    throw invalidResponse('Cloudflare Realtime returned an invalid response.');
   const providerError = getProviderError(payload);
-  if (providerError) throw new Error(`Cloudflare Realtime request failed: ${providerError}.`);
+  if (providerError) throw providerFailure(providerError);
   if (!Array.isArray(payload.tracks)) {
-    throw new Error('Cloudflare Realtime returned an invalid tracks response.');
+    throw invalidResponse('Cloudflare Realtime returned an invalid tracks response.');
   }
 
-  const tracks = payload.tracks.map((value): CloudflareTrack => {
-    if (!isRecord(value)) throw new Error('Cloudflare Realtime returned an invalid track.');
-    return {
-      location:
-        value.location === 'local' || value.location === 'remote' ? value.location : undefined,
-      mid: typeof value.mid === 'string' ? value.mid : undefined,
-      sessionId: typeof value.sessionId === 'string' ? value.sessionId : undefined,
-      trackName: typeof value.trackName === 'string' ? value.trackName : undefined,
-      errorCode: typeof value.errorCode === 'string' ? value.errorCode : undefined,
-      errorDescription:
-        typeof value.errorDescription === 'string' ? value.errorDescription : undefined,
-    };
-  });
+  const tracks = payload.tracks.map(parseTrack);
   const failedTrack = tracks.find((track) => track.errorCode);
   if (failedTrack?.errorCode) {
-    throw new Error(`Cloudflare Realtime track request failed: ${failedTrack.errorCode}.`);
+    throw providerFailure(failedTrack.errorCode);
   }
 
   return {
@@ -85,40 +123,42 @@ export class CloudflareRealtimeGateway {
   private readonly baseUrl: string;
 
   constructor({
-  appId,
-  appSecret,
-  fetchImplementation,
-  baseUrl = 'https://rtc.live.cloudflare.com/v1',
-}: GatewayConfiguration) {
-  this.appId = appId;
-  this.appSecret = appSecret;
-  this.fetchImplementation =
-    fetchImplementation ?? ((input, init) => fetch(input, init));
-  this.baseUrl = baseUrl;
-}
+    appId,
+    appSecret,
+    fetchImplementation,
+    baseUrl = 'https://rtc.live.cloudflare.com/v1',
+  }: GatewayConfiguration) {
+    this.appId = appId;
+    this.appSecret = appSecret;
+    this.fetchImplementation = fetchImplementation ?? ((input, init) => fetch(input, init));
+    this.baseUrl = baseUrl;
+  }
 
   async createSession(correlationId: string): Promise<string> {
     const payload = await this.request(
       `/sessions/new?correlationId=${encodeURIComponent(correlationId)}`,
       'POST',
     );
-    if (!isRecord(payload) || typeof payload.sessionId !== 'string') {
-      throw new Error('Cloudflare Realtime returned an invalid session response.');
+    if (!isRecord(payload)) {
+      throw invalidResponse('Cloudflare Realtime returned an invalid session response.');
     }
     const providerError = getProviderError(payload);
-    if (providerError) throw new Error(`Cloudflare Realtime request failed: ${providerError}.`);
+    if (providerError) throw providerFailure(providerError);
+    if (typeof payload.sessionId !== 'string') {
+      throw invalidResponse('Cloudflare Realtime returned an invalid session response.');
+    }
     return payload.sessionId;
   }
 
   async publishTrack(
-  sessionId: string,
-  sessionDescription: CloudflareSessionDescription,
-): Promise<CloudflareTracksResponse> {
-  return this.trackRequest(sessionId, '/tracks/new', 'POST', {
-    sessionDescription,
-    autoDiscover: true,
-  });
-}
+    sessionId: string,
+    sessionDescription: CloudflareSessionDescription,
+  ): Promise<CloudflareTracksResponse> {
+    return this.trackRequest(sessionId, '/tracks/new', 'POST', {
+      sessionDescription,
+      autoDiscover: true,
+    });
+  }
 
   async pullTrack(
     targetSessionId: string,
@@ -146,6 +186,51 @@ export class CloudflareRealtimeGateway {
     });
   }
 
+  async closeTrackIdempotently(
+    sessionId: string,
+    mid: string,
+  ): Promise<CloudflareTrackClosureResult> {
+    try {
+      return { status: 'closed', response: await this.closeTrack(sessionId, mid) };
+    } catch (closeError) {
+      const presence = await this.getTrackPresence(sessionId, mid);
+      if (presence !== 'present') {
+        return { status: 'already-absent', absence: presence };
+      }
+      throw closeError;
+    }
+  }
+
+  private async getTrackPresence(
+    sessionId: string,
+    mid: string,
+  ): Promise<'present' | 'session' | 'track'> {
+    let payload: unknown;
+    try {
+      payload = await this.request(`/sessions/${encodeURIComponent(sessionId)}`, 'GET');
+    } catch (error) {
+      if (error instanceof CloudflareRealtimeRequestError && error.status === 404) {
+        return 'session';
+      }
+      throw error;
+    }
+    if (!isRecord(payload)) {
+      throw invalidResponse('Cloudflare Realtime returned an invalid session state response.');
+    }
+    const providerError = getProviderError(payload);
+    if (providerError) throw providerFailure(providerError);
+    if (!Array.isArray(payload.tracks)) {
+      throw invalidResponse('Cloudflare Realtime returned an invalid session state response.');
+    }
+    const tracks = payload.tracks.map(parseTrack);
+    const failedTrack = tracks.find((track) => track.errorCode);
+    if (failedTrack?.errorCode) throw providerFailure(failedTrack.errorCode);
+    if (tracks.some((track) => track.mid === undefined)) {
+      throw invalidResponse('Cloudflare Realtime returned an invalid session track.');
+    }
+    return tracks.some((track) => track.mid === mid) ? 'present' : 'track';
+  }
+
   private async trackRequest(
     sessionId: string,
     path: string,
@@ -159,7 +244,7 @@ export class CloudflareRealtimeGateway {
 
   private async request(
     path: string,
-    method: 'POST' | 'PUT',
+    method: 'GET' | 'POST' | 'PUT',
     body?: unknown,
   ): Promise<unknown> {
     const response = await this.fetchImplementation(
@@ -184,9 +269,7 @@ export class CloudflareRealtimeGateway {
 
     if (!response.ok) {
       const providerCode =
-        isRecord(payload) && typeof payload.errorCode === 'string'
-          ? payload.errorCode
-          : undefined;
+        isRecord(payload) && typeof payload.errorCode === 'string' ? payload.errorCode : undefined;
 
       const providerDescription =
         isRecord(payload) && typeof payload.errorDescription === 'string'
@@ -197,21 +280,23 @@ export class CloudflareRealtimeGateway {
         JSON.stringify({
           event: 'cloudflare_realtime_request_failed',
           method,
-          path,
           status: response.status,
           providerCode,
-          providerDescription,
+          hasProviderDescription: providerDescription !== undefined,
         }),
       );
 
-      throw new Error(
+      throw new CloudflareRealtimeRequestError(
+        'http',
         `Cloudflare Realtime returned HTTP ${response.status}` +
           (providerCode ? ` (${providerCode})` : ''),
+        response.status,
+        providerCode,
       );
     }
 
     if (payload === null) {
-      throw new Error(`Cloudflare Realtime returned HTTP ${response.status} without JSON.`);
+      throw invalidResponse(`Cloudflare Realtime returned HTTP ${response.status} without JSON.`);
     }
 
     return payload;
