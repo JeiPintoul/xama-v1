@@ -33,12 +33,6 @@ O cliente solicita a conexão à Edge Function, que cria ou valida a sala e emit
 
 As transmissões remotas são assinadas quando o usuário escolhe assisti-las. Encerrar uma visualização remove sua assinatura de vídeo e áudio, preservando as demais transmissões em uso.
 
-## Autoria e desenvolvimento com IA
-
-Projeto pessoal de **[João Paulo Marcelino Silva](https://github.com/JeiPintoul)**, desenvolvido majoritariamente com assistência de IA generativa.
-
-A atuação inclui concepção do produto, definição das funcionalidades, orientação da implementação, integração dos serviços e acompanhamento do uso real. O desenvolvimento envolve revisão das entregas geradas com IA e evolução da interface e dos fluxos a partir do feedback dos usuários.
-
 ## Estado do projeto
 
 A experiência publicada é o Quick Share. A estrutura de comunidades, canais e navegação adaptativa faz parte do desenvolvimento da plataforma completa e utiliza dados demonstrativos; não representa uma rede social completa já entregue.
