@@ -62,7 +62,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Crie um arquivo `.env.local` em `apps/web/` com o endpoint da sua própria Edge Function:
+Crie um arquivo `.env.local` na raiz do repositório com o endpoint da sua própria Edge Function:
 
 ```dotenv
 VITE_QUICK_ROOM_ENDPOINT=https://your-project.supabase.co/functions/v1/quick-room
